@@ -100,9 +100,6 @@ color_themes = {
     "고장 예측": "viridis"
 }
 
-# 사이드바 설정
-st.sidebar.title("데이터 업로드 및 메뉴 클릭")
-
 # 파일 업로더 - 두 개의 파일 업로드 기능 추가
 uploaded_file1 = st.sidebar.file_uploader("**AS 데이터 업로드**: 구ERP > 자산관리 > 정비관리 > 건설장비AS", type=["xlsx"])
 uploaded_file2 = st.sidebar.file_uploader("**자산조회 파일 업로드**: SAP > 자산조회", type=["xlsx"])

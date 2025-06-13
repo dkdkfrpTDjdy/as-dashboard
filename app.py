@@ -1380,98 +1380,51 @@ if df is not None:
         if interval_model is not None:
             st.info("다음 고장 시기 예측과 확률이 높은 고장 유형을 예측합니다.")
             
-            # 브랜드 및 모델 선택을 한 줄에 배치
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                # 브랜드 선택 (필수)
-                selected_brand = st.selectbox("브랜드(필수)", df['브랜드'].unique())
-                
-            with col2:
-                # 선택한 브랜드에 해당하는 모델만 필터링
-                brand_models = df[df['브랜드'] == selected_brand]['모델명'].unique()
-                selected_model = st.selectbox("모델", brand_models)
-                
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            selected_brand = st.selectbox("브랜드(필수)", df['브랜드'].unique())
+
+        with col2:
+            brand_models = df[df['브랜드'] == selected_brand]['모델명'].unique()
+            selected_model = st.selectbox("모델", brand_models)
+
         # 브랜드/모델 선택 이후 필터링
         filtered_df = df[(df['브랜드'] == selected_brand) & (df['모델명'] == selected_model)]
 
         if not filtered_df.empty:
-            col_id_sel, col_id_input = st.columns(2)
-
-            with col_id_sel:
+            with col3:
                 existing_ids = filtered_df['관리번호'].dropna().unique()
-                selected_id = st.selectbox("관리번호 선택", [""] + list(existing_ids))
-
-            with col_id_input:
-                manual_id = st.text_input("관리번호 입력", value="")
-
-            # 우선순위: 수동 입력값이 우선, 없으면 selectbox 값 사용
-            final_id = manual_id.strip() if manual_id.strip() else selected_id
+                id_placeholder = f"예: {existing_ids[0]}" if len(existing_ids) > 0 else ""
+                final_id = st.text_input("관리번호 입력 또는 선택", placeholder=id_placeholder).strip()
+    
+            with col4:
+                if '제조년도' in filtered_df.columns:
+                    years = filtered_df['제조년도'].dropna().astype(int)
+                    def year_to_range(year):
+                        if year <= 2005: return "2005년 이하"
+                        elif year <= 2010: return "2006-2010"
+                        elif year <= 2015: return "2011-2015"
+                        elif year <= 2020: return "2016-2020"
+                        else: return "2021-2025"
+                    year_ranges = sorted(set(year_to_range(y) for y in years))
+                    selected_year_range = st.selectbox("제조년도(선택)", year_ranges)
+                    year_range_to_int = {"2005년 이하": 2005, "2006-2010": 2008, "2011-2015": 2013, "2016-2020": 2018, "2021-2025": 2023}
+                    year_int = year_range_to_int.get(selected_year_range, 2023)
+                else:
+                    selected_year_range = ""
+                    year_int = df['제조년도'].dropna().astype(int).mode().iloc[0]
 
             if final_id:
                 st.success(f"선택된 관리번호: {final_id}")
             else:
-                st.warning("관리번호를 선택하거나 직접 입력해주세요.")
+                st.warning("관리번호를 입력해주세요.")
 
-            # 제조년도 선택 (구간 기반)
-            if '제조년도' in filtered_df.columns:
-
-                # 소숫점 제거 및 정수화
-                years = filtered_df['제조년도'].dropna().astype(int)
-
-                # 구간 매핑 함수
-                def year_to_range(year):
-                    if year <= 2005:
-                        return "2005년 이하"
-                    elif year <= 2010:
-                        return "2006-2010"
-                    elif year <= 2015:
-                        return "2011-2015"
-                    elif year <= 2020:
-                        return "2016-2020"
-                    else:
-                        return "2021-2025"
-
-                # 구간 리스트 생성
-                year_ranges = sorted(set(year_to_range(y) for y in years))
-                selected_year_range = st.selectbox("제조년도(선택)", year_ranges)
-
-                # 구간을 대표 정수형 연도로 변환
-                year_range_to_int = {
-                    "2005년 이하": 2005,
-                    "2006-2010": 2008,
-                    "2011-2015": 2013,
-                    "2016-2020": 2018,
-                    "2021-2025": 2023
-                }
-                year_int = year_range_to_int.get(selected_year_range, 2023)
-            else:
-                selected_year_range = ""
-                year_int = df['제조년도'].dropna().astype(int).mode().iloc[0]
-
-            # 선택된 정보 요약
+            # 정보 요약
             st.info(f"선택된 관리번호: {final_id or '없음'}, 제조년도: {selected_year_range or '없음'}")
 
             # 해당 모델의 현재 상태에 관한 정보 표시
             filtered_df = df[(df['브랜드'] == selected_brand) & (df['모델명'] == selected_model)]
-
-            if len(filtered_df) > 0:
-                latest_record = filtered_df.sort_values('정비일자', ascending=False).iloc[0]
-
-                # 최근 정비 내용 표시
-                st.subheader("장비 최근 정비 정보")
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    st.write(f"**최근 정비일:** {latest_record['정비일자'].strftime('%Y-%m-%d')}")
-                    st.write(f"**고장 유형:** {latest_record['작업유형']} > {latest_record['정비대상']} > {latest_record['정비작업']}")
-                    st.write(f"**종류:** {latest_record.get('자재내역', '정보 없음')}")
-
-                with col2:
-                    st.write(f"**이전 정비일:** {latest_record.get('최근정비일자', '정보 없음')}")
-                    st.write(f"**정비 내용:** {latest_record.get('정비내용', '정보 없음')}")
-                    st.write(f"**현장명:** {latest_record.get('현장명', '정보 없음')}")
-                    st.write(f"**정비사:** {latest_record.get('정비자', '정보 없음')}")
         
             if len(filtered_df) > 0:
                 latest_record = filtered_df.sort_values('정비일자', ascending=False).iloc[0]
@@ -1483,8 +1436,11 @@ if df is not None:
                 with col1:
                     st.write(f"**최근 정비일:** {latest_record['정비일자'].strftime('%Y-%m-%d')}")
                     st.write(f"**고장 유형:** {latest_record['작업유형']} > {latest_record['정비대상']} > {latest_record['정비작업']}")
-            
+                    st.write(f"**종류:** {latest_record.get('자재내역', '정보 없음')}")
+                    st.write(f"**정비사:** {latest_record.get('정비자', '정보 없음')}")
+
                 with col2:
+                    st.write(f"**이전 정비일:** {latest_record.get('최근정비일자', '정보 없음')}")
                     st.write(f"**정비 내용:** {latest_record.get('정비내용', '정보 없음')}")
                     st.write(f"**현장명:** {latest_record.get('현장명', '정보 없음')}")
         

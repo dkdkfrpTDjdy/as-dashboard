@@ -100,9 +100,12 @@ color_themes = {
     "고장 예측": "viridis"
 }
 
+# 사이드바 설정
+st.sidebar.title("데이터 업로드 및 메뉴 클릭")
+
 # 파일 업로더 - 두 개의 파일 업로드 기능 추가
-uploaded_file1 = st.sidebar.file_uploader("**AS 데이터 업로드**: 구 ERP > 자산관리 > 정비관리 > 건설장비AS", type=["xlsx"])
-uploaded_file2 = st.sidebar.file_uploader("**자산조회 파일 업로드**: SAP > 자산조회", type=["xlsx"])
+uploaded_file1 = st.sidebar.file_uploader("**AS 데이터 업로드**", type=["xlsx"])
+uploaded_file2 = st.sidebar.file_uploader("**자산조회 파일 업로드**", type=["xlsx"])
 
 # 데이터 로드 함수
 @st.cache_data
@@ -1377,7 +1380,7 @@ if df is not None:
         if interval_model is not None:
             st.info("다음 고장 시기 예측과 확률이 높은 고장 유형을 예측합니다.")
             
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3, col4, col5 = st.columns(5)
 
         with col1:
             selected_brand = st.selectbox("브랜드(필수)", df['브랜드'].unique())
@@ -1392,10 +1395,15 @@ if df is not None:
         if not filtered_df.empty:
             with col3:
                 existing_ids = filtered_df['관리번호'].dropna().unique()
-                id_placeholder = f"예: {existing_ids[0]}" if len(existing_ids) > 0 else ""
-                final_id = st.text_input("관리번호 입력 또는 선택", placeholder=id_placeholder).strip()
-    
+                selected_id = st.selectbox("관리번호 선택", [""] + list(existing_ids))
+            
             with col4:
+                id_placeholder = f"예: {existing_ids[0]}" if len(existing_ids) > 0 else ""
+                input_id = st.text_input("관리번호 직접 입력", placeholder=id_placeholder).strip()
+                # 선택된 ID 또는 입력된 ID 사용
+                final_id = selected_id if selected_id else input_id
+    
+            with col5:
                 if '제조년도' in filtered_df.columns:
                     years = filtered_df['제조년도'].dropna().astype(int)
                     def year_to_range(year):
@@ -1551,4 +1559,6 @@ else:
     3. **브랜드/모델 분석**: 브랜드 및 모델별 특성 분석
     4. **정비내용 분석**: 정비내용 워드클라우드 및 분류별 정비내용 분석
     5. **고장 예측**: 기계학습 모델을 활용한 재정비 기간 및 증상 예측
+    6. 데이터 출처: **AS 데이터: 구 ERP > 자산관리 > 정비관리 > 건설장비AS**
+                  **자산조회 파일: SAP > 자산조회**
     """)

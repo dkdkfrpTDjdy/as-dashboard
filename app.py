@@ -1399,7 +1399,7 @@ if df is not None:
             
         with col1:
             selected_brand = st.selectbox("브랜드(필수)", brand_list)
-            
+
         with col2:
             brand_models = df[df['브랜드'] == selected_brand]['모델명'].unique()
             selected_model = st.selectbox("모델(필수)", brand_models)
@@ -1511,7 +1511,7 @@ if df is not None:
                         predicted_detail = le_detail.inverse_transform([predicted_detail_code])[0]
                         
                         # 예측 결과 표시
-                        st.success("예측 분석 완료!")
+                        st.success("**예측 분석 완료** ※ 해당 모델에 따른 예측모델 구현")
                     
                         # 결과 강조 표시
                         col1, col2 = st.columns(2)

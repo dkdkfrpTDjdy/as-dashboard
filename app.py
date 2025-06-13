@@ -1382,9 +1382,24 @@ if df is not None:
             
         col1, col2, col3, col4, col5 = st.columns(5)
 
+        # 브랜드 목록 정의 - 특정 브랜드를 우선순위로 배치하고 나머지는 알파벳 순서로
+        priority_brands = ['도요타', '두산', '현대', '클라크']
+        
+        # 우선순위 브랜드 목록 생성
+        brand_list = [brand for brand in priority_brands if brand in df['브랜드'].unique()]
+        
+        # 나머지 브랜드 추가 (우선순위와 '기타'를 제외하고 정렬)
+        other_brands = sorted([brand for brand in df['브랜드'].unique() 
+                              if brand not in priority_brands and brand != '기타'])
+        brand_list.extend(other_brands)
+        
+        # '기타'가 있으면 마지막에 추가
+        if '기타' in df['브랜드'].unique():
+            brand_list.append('기타')
+            
         with col1:
-            selected_brand = st.selectbox("브랜드(필수)", df['브랜드'].unique())
-
+            selected_brand = st.selectbox("브랜드(필수)", brand_list)
+            
         with col2:
             brand_models = df[df['브랜드'] == selected_brand]['모델명'].unique()
             selected_model = st.selectbox("모델(필수)", brand_models)

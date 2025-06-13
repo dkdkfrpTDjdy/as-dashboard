@@ -158,7 +158,7 @@ def merge_dataframes(df1, df2):
         # 자재내역 컬럼 분할
         if '자재내역' in merged_df.columns:
             # 자재내역에서 추가 정보 추출 (공백으로 나누기)
-            merged_df[['연료형태', '운전방식', '적재용량', '마스트형']] = merged_df['자재내역'].str.split(' ', n=3, expand=True)
+            merged_df[['연료', '운전방식', '적재용량', '마스트형']] = merged_df['자재내역'].str.split(' ', n=3, expand=True)
         
         return merged_df
     except Exception as e:
@@ -253,17 +253,6 @@ if df is not None:
         if 'ADDR' in df.columns:
             df['지역'] = df['ADDR'].apply(extract_first_two_chars)
         
-        # 계절 추가 (데이터가 있는 경우)
-        if '접수일자' in df.columns:
-            # 월 기준 계절 정의
-            df['월'] = df['접수일자'].dt.month
-            season_dict = {
-                1: '겨울', 2: '겨울', 3: '봄',
-                4: '봄', 5: '봄', 6: '여름',
-                7: '여름', 8: '여름', 9: '가을',
-                10: '가을', 11: '가을', 12: '겨울'
-            }
-            df['계절'] = df['월'].map(season_dict)
         
         # 고장유형 조합
         if all(col in df.columns for col in ['대분류', '중분류', '소분류']):
@@ -732,48 +721,48 @@ if df is not None:
                     st.info("선택한 필터에 맞는 데이터가 충분하지 않을 수 있습니다.")
 
             # 자재내역 분석 섹션 추가 - 자재내역 컬럼이 있는 경우만 표시
-            st.subheader("자재내역 분석")
+            st.subheader("모델 타입 분석")
             
             # 탭으로 분석 항목 구분
-            tabs = st.tabs(["연료형태별 분석", "운전방식별 분석", "적재용량별 분석", "마스트형태별 분석"])
+            tabs = st.tabs(["연료", "운전방식", "적재용량", "마스트형태"])
             
-            # 연료형태별 분석
+            # 연료별 분석
             with tabs[0]:
-                if '연료형태' in df.columns:
+                if '연료' in df.columns:
                     col1, col2 = st.columns(2)
                     
                     with col1:
-                        # 연료형태별 AS 건수
-                        st.subheader("연료형태별 AS 건수")
-                        fuel_type_counts = df['연료형태'].value_counts().dropna()
+                        # 연료별 AS 건수
+                        st.subheader("연료별 AS 건수")
+                        fuel_type_counts = df['연료'].value_counts().dropna()
                         
                         if len(fuel_type_counts) > 0:
-                            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+                            fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
                             sns.barplot(x=fuel_type_counts.index, y=fuel_type_counts.values, ax=ax, palette=f"{current_theme}_r")
                             
                             # 막대 위에 텍스트 표시
                             for i, v in enumerate(fuel_type_counts.values):
-                                ax.text(i, v + max(fuel_type_counts.values) * 0.02, str(v),
+                                ax.text(i, v + max(fuel_type_counts.values) * 0.0025, str(v),
                                       ha='center', fontsize=12)
                                 
                             plt.tight_layout()
                             st.pyplot(fig, use_container_width=True)
                             
                             # 다운로드 링크 추가
-                            st.markdown(get_image_download_link(fig, '연료형태별_AS_건수.png', '연료형태별 AS 건수 다운로드'), unsafe_allow_html=True)
+                            st.markdown(get_image_download_link(fig, '연료별_AS_건수.png', '연료별 AS 건수 다운로드'), unsafe_allow_html=True)
                         else:
-                            st.warning("연료형태 데이터가 없습니다.")
+                            st.warning("연료 데이터가 없습니다.")
                     
                     with col2:
-                        # 연료형태별 고장유형 Top 10
-                        st.subheader("연료형태별 고장유형 (상위 고장유형)")
+                        # 연료별 고장유형 Top 10
+                        st.subheader("연료별 고장유형")
                         
-                        # 연료형태 선택
-                        fuel_types = ["전체"] + sorted(df['연료형태'].dropna().unique().tolist())
-                        selected_fuel = st.selectbox("연료형태", fuel_types)
+                        # 연료 선택
+                        fuel_types = ["전체"] + sorted(df['연료'].dropna().unique().tolist())
+                        selected_fuel = st.selectbox("연료", fuel_types)
                         
                         if selected_fuel != "전체":
-                            filtered_df_fuel = df[df['연료형태'] == selected_fuel]
+                            filtered_df_fuel = df[df['연료'] == selected_fuel]
                         else:
                             filtered_df_fuel = df
                             
@@ -785,7 +774,7 @@ if df is not None:
                             
                             # 막대 위에 텍스트 표시
                             for i, v in enumerate(top_faults_by_fuel.values):
-                                ax.text(v + max(top_faults_by_fuel.values) * 0.02, i, str(v),
+                                ax.text(v + max(top_faults_by_fuel.values) * 0.0025, i, str(v),
                                       va='center', fontsize=12)
                                 
                             plt.tight_layout()
@@ -796,7 +785,7 @@ if df is not None:
                         else:
                             st.warning("고장유형 데이터가 없습니다.")
                 else:
-                    st.warning("연료형태 데이터가 없습니다.")
+                    st.warning("연료 데이터가 없습니다.")
             
             # 운전방식별 분석
             with tabs[1]:
@@ -808,16 +797,17 @@ if df is not None:
                         st.subheader("운전방식별 AS 건수")
                         driving_type_counts = df['운전방식'].value_counts().dropna()
                         
-                        if len(driving_type_counts) > 0:
-                            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+                        if len(driving_type_counts) > 10:
+                            fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
                             sns.barplot(x=driving_type_counts.index, y=driving_type_counts.values, ax=ax, palette=f"{current_theme}_r")
                             
                             # 막대 위에 텍스트 표시
                             for i, v in enumerate(driving_type_counts.values):
-                                ax.text(i, v + max(driving_type_counts.values) * 0.02, str(v),
+                                ax.text(i, v + max(driving_type_counts.values) * 0.0025, str(v),
                                       ha='center', fontsize=12)
                                 
                             plt.tight_layout()
+                            plt.xticks(rotation=45)
                             st.pyplot(fig, use_container_width=True)
                             
                             # 다운로드 링크 추가
@@ -827,7 +817,7 @@ if df is not None:
                     
                     with col2:
                         # 운전방식별 고장유형 Top 10
-                        st.subheader("운전방식별 고장유형 (상위 고장유형)")
+                        st.subheader("운전방식별 고장유형")
                         
                         # 운전방식 선택
                         driving_types = ["전체"] + sorted(df['운전방식'].dropna().unique().tolist())
@@ -869,8 +859,8 @@ if df is not None:
                         st.subheader("적재용량별 AS 건수")
                         load_capacity_counts = df['적재용량'].value_counts().dropna()
                         
-                        if len(load_capacity_counts) > 0:
-                            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+                        if len(load_capacity_counts) > 200:
+                            fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
                             sns.barplot(x=load_capacity_counts.index, y=load_capacity_counts.values, ax=ax, palette=f"{current_theme}_r")
                             
                             # 막대 위에 텍스트 표시
@@ -888,7 +878,7 @@ if df is not None:
                     
                     with col2:
                         # 적재용량별 고장유형 Top 10
-                        st.subheader("적재용량별 고장유형 (상위 고장유형)")
+                        st.subheader("적재용량별 고장유형")
                         
                         # 적재용량 선택
                         load_capacities = ["전체"] + sorted(df['적재용량'].dropna().unique().tolist())
@@ -930,8 +920,8 @@ if df is not None:
                         st.subheader("마스트형태별 AS 건수")
                         mast_type_counts = df['마스트형'].value_counts().dropna()
                         
-                        if len(mast_type_counts) > 0:
-                            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+                        if len(mast_type_counts) > 100:
+                            fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
                             sns.barplot(x=mast_type_counts.index, y=mast_type_counts.values, ax=ax, palette=f"{current_theme}_r")
                             
                             # 막대 위에 텍스트 표시
@@ -949,7 +939,7 @@ if df is not None:
                     
                     with col2:
                         # 마스트형태별 고장유형 Top 10
-                        st.subheader("마스트형태별 고장유형 (상위 고장유형)")
+                        st.subheader("마스트형태별 고장유형")
                         
                         # 마스트형태 선택
                         mast_types = ["전체"] + sorted(df['마스트형'].dropna().unique().tolist())
@@ -1528,7 +1518,7 @@ else:
     st.markdown("""
     ### 분석 메뉴
     
-    1. **대시보드**: 핵심 성과 지표, 지역별 분포, 월별/계절별 AS 건수, 30일 내 재정비율
+    1. **대시보드**: 핵심 성과 지표, 지역별 분포, 월별 AS 건수, 30일 내 재정비율
     2. **고장 유형 분석**: 고장 유형 분포 및 브랜드-모델별 고장 패턴 히트맵
     3. **브랜드/모델 분석**: 브랜드 및 모델별 특성 분석
     4. **정비내용 텍스트 분석**: 정비내용 워드클라우드 및 분류별 정비내용 분석

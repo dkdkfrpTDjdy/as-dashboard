@@ -105,7 +105,7 @@ st.sidebar.title("산업장비 AS 데이터 분석")
 
 # 파일 업로더 - 두 개의 파일 업로드 기능 추가
 uploaded_file1 = st.sidebar.file_uploader("AS 데이터 파일 업로드", type=["xlsx"])
-uploaded_file2 = st.sidebar.file_uploader("장비 정보 파일 업로드", type=["xlsx"])
+uploaded_file2 = st.sidebar.file_uploader("자산조회 파일 업로드", type=["xlsx"])
 
 # 샘플 데이터 사용 옵션
 use_sample_data = st.sidebar.checkbox("샘플 데이터 사용하기", False)

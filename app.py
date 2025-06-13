@@ -1063,6 +1063,7 @@ if df is not None:
             col1, col2 = st.columns(2)
             
             with col1:
+                st.subheader("제조년도별 건수")
                 # 제조년도별 AS 건수
                 year_counts = df['제조년도'].dropna().astype(int).value_counts().sort_index()
                 
@@ -1076,7 +1077,6 @@ if df is not None:
                                ha='center', fontsize=12)
                     
                     plt.xticks(rotation=45)
-                    plt.title("제조년도별 AS 건수")
                     plt.tight_layout()
                     st.pyplot(fig, use_container_width=True)
                     
@@ -1086,10 +1086,13 @@ if df is not None:
                     st.warning("제조년도 데이터가 없습니다.")
             
             with col2:
+                st.subheader("제조년도별 처리일수")
                 # 제조년도별 평균 AS 처리일수
                 if 'AS처리일수' in df.columns:
                     df_clean = df.dropna(subset=['제조년도', 'AS처리일수'])
                     if len(df_clean) > 0:
+                        # 제조년도를 정수로 변환
+                        df_clean['제조년도'] = df_clean['제조년도'].astype(int)
                         year_avg_days = df_clean.groupby('제조년도')['AS처리일수'].mean().sort_index()
                         
                         fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)

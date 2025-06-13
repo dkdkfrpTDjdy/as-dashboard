@@ -3,7 +3,6 @@ import os
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
 import matplotlib as mpl
-import urllib.request
 import platform
 
 # 페이지 설정이 가장 먼저 와야 함
@@ -91,7 +90,7 @@ def create_figure_with_korean(figsize=(10, 6), dpi=300):
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     return fig, ax
 
-# 메뉴별 색상 테마 설정
+# 메뉴별 색상 테마 설정 - 메뉴명 정확하게 일치시킴
 color_themes = {
     "대시보드": "Blues",
     "고장 유형 분석": "Greens",
@@ -100,9 +99,12 @@ color_themes = {
     "고장 예측": "viridis"
 }
 
+# 사이드바 설정
+st.sidebar.title("데이터 업로드 및 메뉴 클릭")
+
 # 파일 업로더 - 두 개의 파일 업로드 기능 추가
-uploaded_file1 = st.sidebar.file_uploader("**AS 데이터 업로드**: 구ERP > 자산관리 > 정비관리 > 건설장비AS", type=["xlsx"])
-uploaded_file2 = st.sidebar.file_uploader("**자산조회 파일 업로드**: SAP > 자산조회", type=["xlsx"])
+uploaded_file1 = st.sidebar.file_uploader("**AS 데이터 업로드**", type=["xlsx"])
+uploaded_file2 = st.sidebar.file_uploader("**자산조회 파일 업로드**", type=["xlsx"])
 
 # 데이터 로드 함수
 @st.cache_data
@@ -159,6 +161,7 @@ def merge_dataframes(df1, df2):
         st.error(f"데이터 병합 중 오류 발생: {e}")
         return df1  # 오류 발생시 원본 데이터프레임 반환
 
+# 샘플 데이터 경로 또는 업로드된 파일 사용
 if uploaded_file1 is not None:
     df1 = load_data(uploaded_file1)
     file_name1 = uploaded_file1.name
@@ -181,16 +184,24 @@ else:
     df = None
     file_name = None
 
+# 기본 메뉴 옵션 설정 (처음에는 대시보드 선택)
+default_menu = "대시보드"
+menu_options = ["대시보드", "고장 유형 분석", "브랜드/모델 분석", "정비내용 텍스트 분석", "고장 예측"]
+
 # 데이터가 로드된 경우 분석 시작
 if df is not None:
     # 메뉴 선택 - 데이터 개요와 KPI 대시보드를 합침
     menu = st.sidebar.selectbox(
         "분석 메뉴",
-        ["대시보드", "고장 유형 분석", "브랜드/모델 분석", "정비내용 분석", "고장 예측"]
+        menu_options,
+        index=menu_options.index(default_menu)
     )
     
-    # 현재 메뉴의 색상 테마 설정
-    current_theme = color_themes[menu]
+    # 현재 메뉴의 색상 테마 설정 (오류 방지 로직 추가)
+    if menu in color_themes:
+        current_theme = color_themes[menu]
+    else:
+        current_theme = "Blues"  # 기본 테마 설정
     
     # 데이터 전처리
     try:
@@ -219,12 +230,13 @@ if df is not None:
         if 'ADDR' in df.columns:
             df['지역'] = df['ADDR'].apply(extract_first_two_chars)
 
-        df.rename(columns={
-        '대분류': '작업유형',
-        '중분류': '정비대상',
-        '소분류': '정비작업'
-        }, inplace=True)
-        
+        # 컬럼명 변경 - 있는 경우에만
+        if all(col in df.columns for col in ['대분류', '중분류', '소분류']):
+            df.rename(columns={
+                '대분류': '작업유형',
+                '중분류': '정비대상',
+                '소분류': '정비작업'
+            }, inplace=True)
         
         # 고장유형 조합
         if all(col in df.columns for col in ['작업유형', '정비대상', '정비작업']):
@@ -606,7 +618,7 @@ if df is not None:
     elif menu == "고장 유형 분석":
         st.title("고장 유형 분석")
 
-        # 필요한 컬럼 존재 여부 확인
+        # 필요한 컬럼 존재 여부 확인 (작업유형, 정비대상, 정비작업으로 변경)
         if all(col in df.columns for col in ['작업유형', '정비대상', '정비작업', '고장유형']):
             
             # 탭 구조 정의
@@ -725,7 +737,7 @@ if df is not None:
                         st.subheader("연료별 고장유형")
                         
                         # 연료 선택
-                        fuel_types = ["전체"] + df['연료'].value_counts().index.tolist()
+                        fuel_types = ["전체"] + sorted(df['연료'].dropna().unique().tolist())
                         selected_fuel = st.selectbox("연료", fuel_types)
                         
                         if selected_fuel != "전체":
@@ -762,7 +774,7 @@ if df is not None:
                     with col1:
                         # 운전방식별 AS 건수
                         st.subheader("운전방식별 AS 건수")
-                        driving_type_counts = df['운전방식'].value_counts().head(15)
+                        driving_type_counts = df['운전방식'].value_counts().dropna()
                         
                         if len(driving_type_counts) > 0:
                             fig, ax = create_figure_with_korean(figsize=(10, 9), dpi=300)
@@ -787,7 +799,7 @@ if df is not None:
                         st.subheader("운전방식별 고장유형")
                         
                         # 운전방식 선택
-                        driving_types = ["전체"] + df['운전방식'].value_counts().index.tolist()
+                        driving_types = ["전체"] + sorted(df['운전방식'].dropna().unique().tolist())
                         selected_driving = st.selectbox("운전방식", driving_types)
                         
                         if selected_driving != "전체":
@@ -824,7 +836,7 @@ if df is not None:
                     with col1:
                         # 적재용량별 AS 건수
                         st.subheader("적재용량별 AS 건수")
-                        load_capacity_counts = df['적재용량'].value_counts().head(15)
+                        load_capacity_counts = df['적재용량'].value_counts().dropna()
                         
                         if len(load_capacity_counts) > 0:
                             fig, ax = create_figure_with_korean(figsize=(10, 9), dpi=300)
@@ -848,7 +860,7 @@ if df is not None:
                         st.subheader("적재용량별 고장유형")
                         
                         # 적재용량 선택
-                        load_capacities = ["전체"] + df['적재용량'].value_counts().index.tolist()
+                        load_capacities = ["전체"] + sorted(df['적재용량'].dropna().unique().tolist())
                         selected_capacity = st.selectbox("적재용량", load_capacities)
                         
                         if selected_capacity != "전체":
@@ -885,7 +897,7 @@ if df is not None:
                     with col1:
                         # 마스트형태별 AS 건수
                         st.subheader("마스트형태별 AS 건수")
-                        mast_type_counts = df['마스트형'].value_counts().head(15)
+                        mast_type_counts = df['마스트형'].value_counts().dropna()
                         
                         if len(mast_type_counts) > 0:
                             fig, ax = create_figure_with_korean(figsize=(10, 9), dpi=300)
@@ -909,7 +921,7 @@ if df is not None:
                         st.subheader("마스트형태별 고장유형")
                         
                         # 마스트형태 선택
-                        mast_types = ["전체"] + df['마스트형'].value_counts().index.tolist()
+                        mast_types = ["전체"] + sorted(df['마스트형'].dropna().unique().tolist())
                         selected_mast = st.selectbox("마스트형태", mast_types)
                         
                         if selected_mast != "전체":
@@ -1060,9 +1072,13 @@ if df is not None:
             
             with col1:
                 # 제조년도별 AS 건수
-                year_counts = df['제조년도'].dropna().astype(int).value_counts().sort_index()
+                # 숫자형으로 변환 가능한 값만 사용
+                df_year = df[pd.to_numeric(df['제조년도'], errors='coerce').notna()].copy()
+                df_year['제조년도'] = pd.to_numeric(df_year['제조년도']).astype(int)
                 
-                if len(year_counts) > 0:
+                if not df_year.empty:
+                    year_counts = df_year['제조년도'].value_counts().sort_index()
+                    
                     fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
                     sns.barplot(x=year_counts.index.astype(str), y=year_counts.values, ax=ax, palette=f"{current_theme}_r")
                     
@@ -1084,8 +1100,10 @@ if df is not None:
             with col2:
                 # 제조년도별 평균 AS 처리일수
                 if 'AS처리일수' in df.columns:
-                    df_clean = df.dropna(subset=['제조년도', 'AS처리일수'])
-                    if len(df_clean) > 0:
+                    df_clean = df[pd.to_numeric(df['제조년도'], errors='coerce').notna()].copy()
+                    
+                    if not df_clean.empty:
+                        df_clean['제조년도'] = pd.to_numeric(df_clean['제조년도']).astype(int)
                         year_avg_days = df_clean.groupby('제조년도')['AS처리일수'].mean().sort_index()
                         
                         fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
@@ -1294,181 +1312,227 @@ if df is not None:
         @st.cache_resource
         def prepare_prediction_model(df):
             try:
-                # 기본 필드 검사
-                if not all(col in df.columns for col in ['브랜드', '모델명', '작업유형', '정비대상', '정비작업', 'AS처리일수']):
-                    return None, None, None, None, None, None, None, None, None
-            
-                # 모델 학습을 위한 데이터 준비
-                model_df = df.dropna(subset=['브랜드', '모델명', '작업유형', '정비대상', 'AS처리일수']).copy()
-            
-                if len(model_df) < 100:  # 충분한 데이터가 있는지 확인
-                    return None, None, None, None, None, None, None, None, None
-            
-                # 범주형 변수 인코딩
+                # 필수 컬럼 체크
+                required_cols = ['브랜드', '모델명', '작업유형', '정비대상', '정비작업', 'AS처리일수']
+                if not all(col in df.columns for col in required_cols):
+                    return [None] * 10
+
+                model_df = df.dropna(subset=required_cols).copy()  # 제조년도는 후처리로
+
+                if len(model_df) < 100:
+                    return [None] * 10
+
+                # 범주형 인코딩
                 le_brand = LabelEncoder()
                 le_model = LabelEncoder()
                 le_category = LabelEncoder()
                 le_subcategory = LabelEncoder()
                 le_detail = LabelEncoder()
-                
+
                 model_df['브랜드_인코딩'] = le_brand.fit_transform(model_df['브랜드'])
                 model_df['모델_인코딩'] = le_model.fit_transform(model_df['모델명'])
                 model_df['작업유형_인코딩'] = le_category.fit_transform(model_df['작업유형'])
                 model_df['정비대상_인코딩'] = le_subcategory.fit_transform(model_df['정비대상'])
                 model_df['정비작업_인코딩'] = le_detail.fit_transform(model_df['정비작업'])
-            
-                # 기타 수치형 변수 포함
-                features = ['브랜드_인코딩', '모델_인코딩', '작업유형_인코딩', '정비대상_인코딩', '정비작업_인코딩', 'AS처리일수']
-            
-                # 재정비 기간 예측을 위한 타겟 설정
-                model_df['재정비간격_타겟'] = model_df['재정비간격'].fillna(365)  # 결측값은 1년으로 대체
-                model_df['재정비간격_타겟'] = model_df['재정비간격_타겟'].clip(0, 365)  # 0~365일 범위로 제한
-            
-                # 1. 재정비 간격 예측 모델 (회귀)
+
+                # 제조년도 처리
+                if '제조년도' in model_df.columns:
+                    model_df['제조년도_정수'] = pd.to_numeric(model_df['제조년도'], errors='coerce')
+                    if model_df['제조년도_정수'].isna().any():
+                        mode_year = model_df['제조년도_정수'].mode().iloc[0]
+                        model_df['제조년도_정수'] = model_df['제조년도_정수'].fillna(mode_year)
+                else:
+                    model_df['제조년도_정수'] = 2010  # 기본값
+
+                # 피처
+                features = [
+                    '브랜드_인코딩', '모델_인코딩', '작업유형_인코딩', 
+                    '정비대상_인코딩', '정비작업_인코딩', 'AS처리일수', 
+                    '제조년도_정수'
+                ]
+
+                # 타겟
+                model_df['재정비간격_타겟'] = model_df['재정비간격'].fillna(365).clip(0, 365)
                 X = model_df[features]
                 y_interval = model_df['재정비간격_타겟']
-            
+
+                # 회귀 모델 학습
                 X_train, X_test, y_train, y_test = train_test_split(X, y_interval, test_size=0.2, random_state=42)
                 rf_interval_model = RandomForestRegressor(n_estimators=100, random_state=42)
                 rf_interval_model.fit(X_train, y_train)
-            
-                # 2. 고장 유형 예측 모델 (분류) - 각 고장 유형 레벨별로 별도의 모델 구축
-                # 작업유형 예측 모델
+
+                # 분류 모델들 학습
                 category_model = RandomForestClassifier(n_estimators=100, random_state=42)
                 category_model.fit(X, model_df['작업유형_인코딩'])
-                
-                # 정비대상 예측 모델
+
                 subcategory_model = RandomForestClassifier(n_estimators=100, random_state=42)
                 subcategory_model.fit(X, model_df['정비대상_인코딩'])
-            
-                # 정비작업 예측 모델
+
                 detail_model = RandomForestClassifier(n_estimators=100, random_state=42)
                 detail_model.fit(X, model_df['정비작업_인코딩'])
-                
-                return (rf_interval_model, category_model, subcategory_model, detail_model, 
-                       le_brand, le_model, le_category, le_subcategory, le_detail)
+
+                return (
+                    rf_interval_model, category_model, subcategory_model, detail_model,
+                    le_brand, le_model, le_category, le_subcategory, le_detail
+                )
+
             except Exception as e:
                 st.error(f"모델 준비 중 오류 발생: {e}")
-                return None, None, None, None, None, None, None, None, None
+                return [None] * 10
     
         # 모델 준비 (백그라운드에서 실행)
         interval_model, category_model, subcategory_model, detail_model, le_brand, le_model, le_category, le_subcategory, le_detail = prepare_prediction_model(df)
         
         if interval_model is not None:
-            st.info("장비의 브랜드와 모델을 선택하면 다음 고장 시기 예측과 확률이 높은 고장 유형을 예측합니다.")
+            st.info("다음 고장 시기 예측과 확률이 높은 고장 유형을 예측합니다.")
             
             # 브랜드 및 모델 선택을 한 줄에 배치
             col1, col2 = st.columns(2)
             
             with col1:
                 # 브랜드 선택 (필수)
-                selected_brand = st.selectbox("브랜드 선택 (필수):", df['브랜드'].unique())
+                selected_brand = st.selectbox("브랜드(필수)", df['브랜드'].unique())
                 
             with col2:
                 # 선택한 브랜드에 해당하는 모델만 필터링
                 brand_models = df[df['브랜드'] == selected_brand]['모델명'].unique()
-                selected_model = st.selectbox("모델 선택 (필수):", brand_models)
+                selected_model = st.selectbox("모델", brand_models)
                 
-            # 해당 모델의 현재 상태에 관한 정보 표시
+            # 브랜드/모델 선택 이후 필터링
             filtered_df = df[(df['브랜드'] == selected_brand) & (df['모델명'] == selected_model)]
-        
-            if len(filtered_df) > 0:
-                latest_record = filtered_df.sort_values('정비일자', ascending=False).iloc[0]
+
+            if not filtered_df.empty:
+                # 관리번호 선택 or 직접입력
+                st.markdown("관리번호 (선택)")
+                col_id_sel, col_id_input = st.columns(2)
+
+                with col_id_sel:
+                    existing_ids = filtered_df['관리번호'].dropna().unique()
+                    selected_id = st.selectbox("기존 관리번호", [""] + list(existing_ids))
+
+                with col_id_input:
+                    manual_id = st.text_input("직접 입력 (우선 적용됨)", value="")
+
+                final_id = manual_id if manual_id else selected_id
+
+                # 제조년도 선택
+                if '제조년도' in filtered_df.columns:
+                    st.markdown("제조년도 (선택)")
+                    years = filtered_df['제조년도'].dropna().unique()
+                    selected_year = st.selectbox("제조년도 선택", [""] + sorted(years.astype(str)))
+                else:
+                    selected_year = ""
+
+                # 선택된 정보 요약
+                st.info(f"선택된 관리번호: {final_id or '없음'}, 제조년도: {selected_year or '없음'}")
+
+                # 해당 모델의 현재 상태에 관한 정보 표시
+                if len(filtered_df) > 0:
+                    latest_record = filtered_df.sort_values('정비일자', ascending=False).iloc[0]
+                
+                    # 최근 정비 내용 표시
+                    st.subheader("장비 최근 정비 정보")
+                    col1, col2 = st.columns(2)
+                
+                    with col1:
+                        st.write(f"**최근 정비일:** {latest_record['정비일자'].strftime('%Y-%m-%d')}")
+                        st.write(f"**고장 유형:** {latest_record['작업유형']} > {latest_record['정비대상']} > {latest_record['정비작업']}")
+                
+                    with col2:
+                        st.write(f"**정비 내용:** {latest_record.get('정비내용', '정보 없음')}")
+                        st.write(f"**현장명:** {latest_record.get('현장명', '정보 없음')}")
             
-                # 최근 정비 내용 표시
-                st.subheader("장비 최근 정비 정보")
-                col1, col2 = st.columns(2)
-            
-                with col1:
-                    st.write(f"**최근 정비일:** {latest_record['정비일자'].strftime('%Y-%m-%d')}")
-                    st.write(f"**고장 유형:** {latest_record['작업유형']} > {latest_record['정비대상']} > {latest_record['정비작업']}")
-            
-                with col2:
-                    st.write(f"**정비 내용:** {latest_record.get('정비내용', '정보 없음')}")
-                    st.write(f"**현장명:** {latest_record.get('현장명', '정보 없음')}")
-        
-            # 예측 실행
-            if st.button("고장 예측 실행"):
-                with st.spinner("예측 분석 중..."):
-                    try:
-                        # 선택한 값을 인코딩
-                        brand_code = le_brand.transform([selected_brand])[0]
-                        model_code = le_model.transform([selected_model])[0]
-                        
-                        # 해당 브랜드/모델의 최근 정비 데이터 가져오기
-                        latest_data = df[(df['브랜드'] == selected_brand) & (df['모델명'] == selected_model)].sort_values('정비일자', ascending=False).iloc[0]
-                        
-                        # 인코딩
-                        category_code = le_category.transform([latest_data['작업유형']])[0]
-                        subcat_code = le_subcategory.transform([latest_data['정비대상']])[0]
-                        detail_code = le_detail.transform([latest_data['정비작업']])[0]
-                        
-                        # AS 처리일수 - 해당 모델 및 브랜드의 평균 사용
-                        avg_repair_days = df[(df['브랜드'] == selected_brand) & (df['모델명'] == selected_model)]['AS처리일수'].mean()
-                        if pd.isna(avg_repair_days):
-                            avg_repair_days = df['AS처리일수'].mean()
-                    
-                        # 예측할 데이터 준비
-                        pred_data = np.array([[
-                            brand_code, model_code, category_code, subcat_code, detail_code, avg_repair_days
-                        ]])
-                    
-                        # 1. 재정비 기간 예측
-                        predicted_days = interval_model.predict(pred_data)[0]
-                    
-                        # 2. 다음 고장 유형 예측
-                        predicted_category_code = category_model.predict(pred_data)[0]
-                        predicted_subcategory_code = subcategory_model.predict(pred_data)[0]
-                        predicted_detail_code = detail_model.predict(pred_data)[0]
-                    
-                        # 코드를 다시 원래 이름으로 변환
-                        predicted_category = le_category.inverse_transform([predicted_category_code])[0]
-                        predicted_subcategory = le_subcategory.inverse_transform([predicted_subcategory_code])[0]
-                        predicted_detail = le_detail.inverse_transform([predicted_detail_code])[0]
-                        
-                        # 예측 결과 표시
-                        st.success("예측 분석 완료!")
-                    
-                        # 결과 강조 표시
-                        col1, col2 = st.columns(2)
-                    
-                        with col1:
-                            st.subheader("다음 정비 시기")
-                            prediction_date = datetime.datetime.now() + datetime.timedelta(days=int(predicted_days))
-                        
-                            st.markdown(f"""
-                            **장비 정보**: {selected_brand} {selected_model}  
-                            **예상 재정비 기간**: 약 **{int(predicted_days)}일** 후  
-                            **예상 고장 날짜**: {prediction_date.strftime('%Y-%m-%d')}
-                            """)
+                # 예측 실행
+                if st.button("고장 예측 실행"):
+                    with st.spinner("예측 분석 중..."):
+                        try:
+                            # 선택한 값을 인코딩
+                            brand_code = le_brand.transform([selected_brand])[0]
+                            model_code = le_model.transform([selected_model])[0]
                             
-                            # 위험도 평가
-                            risk_level = "낮음"
-                            risk_color = "green"
-                            if predicted_days < 30:
-                                risk_level = "매우 높음"
-                                risk_color = "red"
-                            elif predicted_days < 90:
-                                risk_level = "높음"
-                                risk_color = "orange"
-                            elif predicted_days < 180:
-                                risk_level = "중간"
-                                risk_color = "yellow"
+                            # 해당 브랜드/모델의 최근 정비 데이터 가져오기
+                            latest_data = df[(df['브랜드'] == selected_brand) & (df['모델명'] == selected_model)].sort_values('정비일자', ascending=False).iloc[0]
                             
-                            st.markdown(f"<h4 style='color: {risk_color};'>재정비 위험도: {risk_level}</h4>", unsafe_allow_html=True)
+                            # 인코딩
+                            category_code = le_category.transform([latest_data['작업유형']])[0]
+                            subcat_code = le_subcategory.transform([latest_data['정비대상']])[0]
+                            detail_code = le_detail.transform([latest_data['정비작업']])[0]
+                            
+                            # AS 처리일수 - 해당 모델 및 브랜드의 평균 사용
+                            avg_repair_days = df[(df['브랜드'] == selected_brand) & (df['모델명'] == selected_model)]['AS처리일수'].mean()
+                            if pd.isna(avg_repair_days):
+                                avg_repair_days = df['AS처리일수'].mean()
                         
-                        with col2:
-                            st.subheader("고장 유형 예측")
+                            # 제조년도 숫자 처리
+                            try:
+                                year_int = int(selected_year) if selected_year else int(df['제조년도'].dropna().astype(int).mode().iloc[0])
+                            except:
+                                year_int = 2010  # 기본값
+
+                            # 예측할 데이터 준비 
+                            pred_data = np.array([[
+                                brand_code, model_code, category_code, subcat_code, detail_code, avg_repair_days,
+                                year_int 
+                            ]])
                         
-                            st.markdown(f"""
-                            **작업유형**: {predicted_category}  
-                            **정비대상**: {predicted_subcategory}  
-                            **정비작업**: {predicted_detail}
-                            """)
-                    
-                    except Exception as e:
-                        st.error(f"예측 중 오류가 발생했습니다: {e}")
-                        st.info("선택한 데이터에 대한 학습 정보가 부족할 수 있습니다.")
+                            # 1. 재정비 기간 예측
+                            predicted_days = interval_model.predict(pred_data)[0]
+                        
+                            # 2. 다음 고장 유형 예측
+                            predicted_category_code = category_model.predict(pred_data)[0]
+                            predicted_subcategory_code = subcategory_model.predict(pred_data)[0]
+                            predicted_detail_code = detail_model.predict(pred_data)[0]
+                        
+                            # 코드를 다시 원래 이름으로 변환
+                            predicted_category = le_category.inverse_transform([predicted_category_code])[0]
+                            predicted_subcategory = le_subcategory.inverse_transform([predicted_subcategory_code])[0]
+                            predicted_detail = le_detail.inverse_transform([predicted_detail_code])[0]
+                            
+                            # 예측 결과 표시
+                            st.success("예측 분석 완료!")
+                        
+                            # 결과 강조 표시
+                            col1, col2 = st.columns(2)
+                        
+                            with col1:
+                                st.subheader("다음 정비 시기")
+                                prediction_date = datetime.datetime.now() + datetime.timedelta(days=int(predicted_days))
+                            
+                                st.markdown(f"""
+                                **장비 정보**: {selected_brand} {selected_model}  
+                                **예상 재정비 기간**: 약 **{int(predicted_days)}일** 후  
+                                **예상 고장 날짜**: {prediction_date.strftime('%Y-%m-%d')}
+                                """)
+                                
+                                # 위험도 평가
+                                risk_level = "낮음"
+                                risk_color = "green"
+                                if predicted_days < 30:
+                                    risk_level = "매우 높음"
+                                    risk_color = "red"
+                                elif predicted_days < 90:
+                                    risk_level = "높음"
+                                    risk_color = "orange"
+                                elif predicted_days < 180:
+                                    risk_level = "중간"
+                                    risk_color = "yellow"
+                                
+                                st.markdown(f"<h4 style='color: {risk_color};'>재정비 위험도: {risk_level}</h4>", unsafe_allow_html=True)
+                            
+                            with col2:
+                                st.subheader("고장 유형 예측")
+                            
+                                st.markdown(f"""
+                                **작업유형**: {predicted_category}  
+                                **정비대상**: {predicted_subcategory}  
+                                **정비작업**: {predicted_detail}
+                                """)
+                        
+                        except Exception as e:
+                            st.error(f"예측 중 오류가 발생했습니다: {e}")
+                            st.info("선택한 데이터에 대한 학습 정보가 부족할 수 있습니다.")
+            else:
+                st.warning("선택한 브랜드와 모델에 대한 데이터가 없습니다.")
         else:
             st.warning("""
             예측 모델을 준비할 수 없습니다. 다음 사항을 확인해주세요:
@@ -1490,4 +1554,6 @@ else:
     3. **브랜드/모델 분석**: 브랜드 및 모델별 특성 분석
     4. **정비내용 텍스트 분석**: 정비내용 워드클라우드 및 분류별 정비내용 분석
     5. **고장 예측**: 기계학습 모델을 활용한 재정비 기간 및 증상 예측
+    6. 데이터 출처: **AS 데이터: 구 ERP > 자산관리 > 정비관리 > 건설장비AS**
+                  **자산조회 파일: SAP > 자산조회**
     """)

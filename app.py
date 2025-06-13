@@ -677,13 +677,22 @@ if df is not None:
                         sns.barplot(x=category_counts.index, y=category_counts.values, ax=ax1, palette=f"{current_theme}_r")
                         plt.xticks(rotation=45, ha='right')
                         for i, v in enumerate(category_counts.values):
-                            ax1.text(i, v + max(category_counts.values) * 0.02, str(v), ha='center', fontsize=12)
+                            ax1.text(i, v + max(category_counts.values) * 0.01, str(v), ha='center', fontsize=12)
                         plt.tight_layout()
                         st.pyplot(fig1, use_container_width=True)
                         st.markdown(get_image_download_link(fig1, f'고장유형_{colname}_분포.png', f'{colname} 분포 다운로드'), unsafe_allow_html=True)
 
                     with col2:
-                        st.markdown(f"**{colname}별 고장 유형 비율**")
+                        st.markdown(f"**{colname}별 비율**")
+
+                        # 5% 미만은 기타로 그룹화
+                        category_counts_ratio = category_counts / category_counts.sum()
+                        small_categories = category_counts_ratio[category_counts_ratio < 0.05]
+                        if not small_categories.empty:
+                            others_sum = small_categories.sum() * category_counts.sum()
+                            category_counts = category_counts[category_counts_ratio >= 0.05]
+                            category_counts['기타'] = int(others_sum)
+
                         fig2, ax2 = create_figure_with_korean(figsize=(8, 8), dpi=300)
                         category_counts.plot(kind='pie', autopct='%1.1f%%', ax=ax2,
                                              colors=sns.color_palette(current_theme, n_colors=len(category_counts)))
@@ -693,7 +702,7 @@ if df is not None:
                         st.markdown(get_image_download_link(fig2, f'고장유형_{colname}_비율.png', f'{colname} 비율 다운로드'), unsafe_allow_html=True)
 
                     with col3:
-                        st.markdown(f"**고장유형 vs 브랜드_모델 히트맵**")
+                        st.markdown(f"**모델에 따른 고장유형 증상**")
                         try:
                             pivot_df = df_filtered.pivot_table(
                                 index='고장유형',

@@ -252,11 +252,17 @@ if df is not None:
         # 지역 추출
         if 'ADDR' in df.columns:
             df['지역'] = df['ADDR'].apply(extract_first_two_chars)
+
+        df.rename(columns={
+        '대분류': '작업유형',
+        '중분류': '정비대상',
+        '소분류': '정비작업'
+        }, inplace=True)
         
         
         # 고장유형 조합
-        if all(col in df.columns for col in ['대분류', '중분류', '소분류']):
-            df['고장유형'] = df['대분류'].astype(str) + '_' + df['중분류'].astype(str) + '_' + df['소분류'].astype(str)
+        if all(col in df.columns for col in ['작업유형', '정비대상', '정비작업']):
+            df['고장유형'] = df['작업유형'].astype(str) + '_' + df['정비대상'].astype(str) + '_' + df['정비작업'].astype(str)
             df['브랜드_모델'] = df['브랜드'].astype(str) + '_' + df['모델명'].astype(str)
     except Exception as e:
         st.warning(f"일부 데이터 전처리 중 오류가 발생했습니다: {e}")
@@ -597,10 +603,10 @@ if df is not None:
                                     popup_text += f"주소: {row['ADDR']}<br>"
                                 if '정비일자' in df_map.columns and pd.notna(row['정비일자']):
                                     popup_text += f"수리일: {row['정비일자']}<br>"
-                                if '중분류' in df_map.columns and pd.notna(row['중분류']):
-                                    popup_text += f"증상: {row['중분류']}<br>"
-                                if '소분류' in df_map.columns and pd.notna(row['소분류']):
-                                    popup_text += f"상세: {row['소분류']}<br>"
+                                if '정비대상' in df_map.columns and pd.notna(row['정비대상']):
+                                    popup_text += f"증상: {row['정비대상']}<br>"
+                                if '정비작업' in df_map.columns and pd.notna(row['정비작업']):
+                                    popup_text += f"상세: {row['정비작업']}<br>"
                                 
                                 folium.CircleMarker(
                                     location=[lat, lon],
@@ -633,92 +639,78 @@ if df is not None:
     
     elif menu == "고장 유형 분석":
         st.title("고장 유형 분석")
-        
-        if all(col in df.columns for col in ['대분류', '중분류', '소분류', '고장유형']):
-            # 그래프 행 1: 대분류 분포, 고장유형 비율, 고장유형-브랜드 히트맵
-            col1, col2, col3 = st.columns(3)
+
+        # 필요한 컬럼 존재 여부 확인
+        if all(col in df.columns for col in ['작업유형', '정비대상', '정비작업', '고장유형']):
             
-            with col1:
-                # 고장 유형 분포
-                st.subheader("고장 유형 분포 (대분류)")
-                
-                category_counts = df['대분류'].value_counts()
-                
-                fig, ax = create_figure_with_korean(figsize=(8, 7), dpi=300)
-                sns.barplot(x=category_counts.index, y=category_counts.values, ax=ax, palette=f"{current_theme}_r")
-                plt.xticks(ha='right')
-                
-                # 막대 위에 텍스트 표시
-                for i, v in enumerate(category_counts.values):
-                    ax.text(i, v + max(category_counts.values) * 0.02, str(v),
-                           ha='center', fontsize=12)
-                
-                plt.tight_layout()
-                st.pyplot(fig, use_container_width=True)
-                
-                # 다운로드 링크 추가
-                st.markdown(get_image_download_link(fig, '고장유형_대분류_분포.png', '고장유형 대분류 분포 다운로드'), unsafe_allow_html=True)
-                
-            with col2:
-                # 대분류 선택 옵션
-                st.subheader("대분류별 고장 유형 비율")
-                
-                # 4. 파이 차트 크기 조정
-                fig, ax = create_figure_with_korean(figsize=(8, 8), dpi=300)
-                category_counts.plot(kind='pie', autopct='%1.1f%%', ax=ax, 
-                                     colors=sns.color_palette(current_theme, n_colors=len(category_counts)))
-                ax.set_ylabel('')
-                plt.tight_layout()
-                
-                st.pyplot(fig, use_container_width=True)
-                
-                # 다운로드 링크 추가
-                st.markdown(get_image_download_link(fig, '고장유형_비율.png', '고장유형 비율 다운로드'), unsafe_allow_html=True)
-                
-            with col3:
-                # 대분류 선택 옵션
-                st.subheader("브랜드-모델 및 고장유형")
-                
-                # 대분류 선택 옵션 - 문자열로 변환하여 정렬 오류 방지
-                category_values = convert_to_str_list(df['대분류'].unique())
-                selected_category = st.selectbox("대분류 선택", ["전체"] + sorted(category_values))
-                
-                if selected_category != "전체":
-                    filtered_df = df[df['대분류'].astype(str) == selected_category]
-                else:
-                    filtered_df = df
-                
-                # Top N 고장유형 필터링
-                top_faults = filtered_df['고장유형'].value_counts().nlargest(15).index
-                df_filtered = filtered_df[filtered_df['고장유형'].isin(top_faults)]
-                
-                # Top N 브랜드-모델 조합 필터링
-                top_combos = df_filtered['브랜드_모델'].value_counts().nlargest(15).index
-                df_filtered = df_filtered[df_filtered['브랜드_모델'].isin(top_combos)]
-                
-                # 피벗 테이블 생성
-                try:
-                    pivot_df = df_filtered.pivot_table(
-                        index='고장유형',
-                        columns='브랜드_모델',
-                        aggfunc='size',
-                        fill_value=0
-                    )
+            # 탭 구조 정의
+            category_tabs = {
+                "작업유형": "작업유형",
+                "정비대상": "정비대상",
+                "정비작업": "정비작업"
+            }
+
+            tabs = st.tabs(list(category_tabs.keys()))
+
+            for tab, colname in zip(tabs, category_tabs.values()):
+                with tab:
+                    st.subheader(f"고장 유형 분포 ({colname})")
                     
-                    # 히트맵 생성 (비율 조정)
-                    fig, ax = create_figure_with_korean(figsize=(12, 10), dpi=300)
-                    sns.heatmap(pivot_df, cmap=current_theme, annot=True, fmt='d', linewidths=0.5, ax=ax)
-                    plt.xticks(rotation=90)
-                    plt.yticks(rotation=0)
+                    category_counts = df[colname].value_counts()
+                    
+                    # 막대 그래프
+                    fig1, ax1 = create_figure_with_korean(figsize=(8, 7), dpi=300)
+                    sns.barplot(x=category_counts.index, y=category_counts.values, ax=ax1, palette=f"{current_theme}_r")
+                    plt.xticks(rotation=45, ha='right')
+                    for i, v in enumerate(category_counts.values):
+                        ax1.text(i, v + max(category_counts.values) * 0.02, str(v), ha='center', fontsize=12)
                     plt.tight_layout()
-                    
-                    st.pyplot(fig, use_container_width=True)
-                    
-                    # 다운로드 링크 추가
-                    st.markdown(get_image_download_link(fig, '고장유형_브랜드_히트맵.png', '고장유형-브랜드 히트맵 다운로드'), unsafe_allow_html=True)
-                except Exception as e:
-                    st.error(f"히트맵 생성 중 오류가 발생했습니다: {e}")
-                    st.info("선택한 필터에 맞는 데이터가 충분하지 않을 수 있습니다.")
+                    st.pyplot(fig1, use_container_width=True)
+                    st.markdown(get_image_download_link(fig1, f'고장유형_{colname}_분포.png', f'고장유형 {colname} 분포 다운로드'), unsafe_allow_html=True)
+
+                    # 파이 차트
+                    st.subheader(f"{colname}별 고장 유형 비율")
+                    fig2, ax2 = create_figure_with_korean(figsize=(8, 8), dpi=300)
+                    category_counts.plot(kind='pie', autopct='%1.1f%%', ax=ax2, 
+                                         colors=sns.color_palette(current_theme, n_colors=len(category_counts)))
+                    ax2.set_ylabel('')
+                    plt.tight_layout()
+                    st.pyplot(fig2, use_container_width=True)
+                    st.markdown(get_image_download_link(fig2, f'고장유형_{colname}_비율.png', f'{colname} 비율 다운로드'), unsafe_allow_html=True)
+
+                    # 히트맵
+                    st.subheader(f"브랜드-모델 및 고장유형 (기준: {colname})")
+                    category_values = convert_to_str_list(df[colname].unique())
+                    selected_category = st.selectbox(f"{colname} 선택", ["전체"] + sorted(category_values), key=f"sel_{colname}")
+
+                    if selected_category != "전체":
+                        filtered_df = df[df[colname].astype(str) == selected_category]
+                    else:
+                        filtered_df = df
+
+                    top_faults = filtered_df['고장유형'].value_counts().nlargest(15).index
+                    df_filtered = filtered_df[filtered_df['고장유형'].isin(top_faults)]
+
+                    top_combos = df_filtered['브랜드_모델'].value_counts().nlargest(15).index
+                    df_filtered = df_filtered[df_filtered['브랜드_모델'].isin(top_combos)]
+
+                    try:
+                        pivot_df = df_filtered.pivot_table(
+                            index='고장유형',
+                            columns='브랜드_모델',
+                            aggfunc='size',
+                            fill_value=0
+                        )
+                        fig3, ax3 = create_figure_with_korean(figsize=(12, 10), dpi=300)
+                        sns.heatmap(pivot_df, cmap=current_theme, annot=True, fmt='d', linewidths=0.5, ax=ax3)
+                        plt.xticks(rotation=90)
+                        plt.yticks(rotation=0)
+                        plt.tight_layout()
+                        st.pyplot(fig3, use_container_width=True)
+                        st.markdown(get_image_download_link(fig3, f'고장유형_{colname}_히트맵.png', f'{colname} 기준 히트맵 다운로드'), unsafe_allow_html=True)
+                    except Exception as e:
+                        st.error(f"히트맵 생성 중 오류가 발생했습니다: {e}")
+                        st.info("선택한 필터에 맞는 데이터가 충분하지 않을 수 있습니다.")
 
             # 자재내역 분석 섹션 추가 - 자재내역 컬럼이 있는 경우만 표시
             st.subheader("모델 타입 분석")
@@ -742,7 +734,7 @@ if df is not None:
                             
                             # 막대 위에 텍스트 표시
                             for i, v in enumerate(fuel_type_counts.values):
-                                ax.text(i, v + max(fuel_type_counts.values) * 0.0025, str(v),
+                                ax.text(i, v + max(fuel_type_counts.values) * 0.01, str(v),
                                       ha='center', fontsize=12)
                                 
                             plt.tight_layout()
@@ -774,7 +766,7 @@ if df is not None:
                             
                             # 막대 위에 텍스트 표시
                             for i, v in enumerate(top_faults_by_fuel.values):
-                                ax.text(v + max(top_faults_by_fuel.values) * 0.0025, i, str(v),
+                                ax.text(v + max(top_faults_by_fuel.values) * 0.002, i, str(v),
                                       va='center', fontsize=12)
                                 
                             plt.tight_layout()
@@ -803,7 +795,7 @@ if df is not None:
                             
                             # 막대 위에 텍스트 표시
                             for i, v in enumerate(driving_type_counts.values):
-                                ax.text(i, v + max(driving_type_counts.values) * 0.0025, str(v),
+                                ax.text(i, v + max(driving_type_counts.values) * 0.01, str(v),
                                       ha='center', fontsize=12)
                                 
                             plt.tight_layout()
@@ -836,7 +828,7 @@ if df is not None:
                             
                             # 막대 위에 텍스트 표시
                             for i, v in enumerate(top_faults_by_driving.values):
-                                ax.text(v + max(top_faults_by_driving.values) * 0.02, i, str(v),
+                                ax.text(v + max(top_faults_by_driving.values) * 0.002, i, str(v),
                                       va='center', fontsize=12)
                                 
                             plt.tight_layout()
@@ -897,7 +889,7 @@ if df is not None:
                             
                             # 막대 위에 텍스트 표시
                             for i, v in enumerate(top_faults_by_capacity.values):
-                                ax.text(v + max(top_faults_by_capacity.values) * 0.02, i, str(v),
+                                ax.text(v + max(top_faults_by_capacity.values) * 0.002, i, str(v),
                                       va='center', fontsize=12)
                                 
                             plt.tight_layout()
@@ -958,7 +950,7 @@ if df is not None:
                             
                             # 막대 위에 텍스트 표시
                             for i, v in enumerate(top_faults_by_mast.values):
-                                ax.text(v + max(top_faults_by_mast.values) * 0.02, i, str(v),
+                                ax.text(v + max(top_faults_by_mast.values) * 0.002, i, str(v),
                                       va='center', fontsize=12)
                                 
                             plt.tight_layout()
@@ -980,7 +972,7 @@ if df is not None:
             })
             st.dataframe(fault_df)
         else:
-            st.warning("고장 유형 분석에 필요한 컬럼(대분류, 중분류, 소분류)이 데이터에 없습니다.")
+            st.warning("고장 유형 분석에 필요한 컬럼(작업유형, 정비대상, 정비작업)이 데이터에 없습니다.")
 
     elif menu == "브랜드/모델 분석":
         st.title("브랜드 및 모델 분석")
@@ -1214,47 +1206,47 @@ if df is not None:
                 # 분류별 정비내용 워드클라우드
                 st.subheader("분류별 정비내용 워드클라우드")
                 
-                if all(col in df.columns for col in ['대분류', '중분류', '소분류', '정비내용']):
+                if all(col in df.columns for col in ['작업유형', '정비대상', '정비작업', '정비내용']):
                     col1, col2, col3 = st.columns(3)
                     
                     with col1:
                         # 문자열 변환으로 정렬 오류 방지
-                        categories = ["전체"] + sorted(convert_to_str_list(df['대분류'].dropna().unique()))
-                        selected_category = st.selectbox("대분류", categories)
+                        categories = ["전체"] + sorted(convert_to_str_list(df['작업유형'].dropna().unique()))
+                        selected_category = st.selectbox("작업유형", categories)
                     
-                    # 선택된 대분류에 따라 데이터 필터링
+                    # 선택된 작업유형에 따라 데이터 필터링
                     if selected_category != "전체":
-                        filtered_df = df[df['대분류'].astype(str) == selected_category]
+                        filtered_df = df[df['작업유형'].astype(str) == selected_category]
                         
                         with col2:
-                            subcategories = ["전체"] + sorted(convert_to_str_list(filtered_df['중분류'].dropna().unique()))
-                            selected_subcategory = st.selectbox("중분류", subcategories)
+                            subcategories = ["전체"] + sorted(convert_to_str_list(filtered_df['정비대상'].dropna().unique()))
+                            selected_subcategory = st.selectbox("정비대상", subcategories)
                         
-                        # 선택된 중분류에 따라 추가 필터링
+                        # 선택된 정비대상에 따라 추가 필터링
                         if selected_subcategory != "전체":
-                            filtered_df = filtered_df[filtered_df['중분류'].astype(str) == selected_subcategory]
+                            filtered_df = filtered_df[filtered_df['정비대상'].astype(str) == selected_subcategory]
                             
                             with col3:
-                                detailed_categories = ["전체"] + sorted(convert_to_str_list(filtered_df['소분류'].dropna().unique()))
-                                selected_detailed = st.selectbox("소분류", detailed_categories)
+                                detailed_categories = ["전체"] + sorted(convert_to_str_list(filtered_df['정비작업'].dropna().unique()))
+                                selected_detailed = st.selectbox("정비작업", detailed_categories)
                             
-                            # 선택된 소분류에 따라 최종 필터링
+                            # 선택된 정비작업에 따라 최종 필터링
                             if selected_detailed != "전체":
-                                filtered_df = filtered_df[filtered_df['소분류'].astype(str) == selected_detailed]
+                                filtered_df = filtered_df[filtered_df['정비작업'].astype(str) == selected_detailed]
                         else:
                             selected_detailed = "전체"
                             with col3:
-                                st.selectbox("소분류", ["전체"])
+                                st.selectbox("정비작업", ["전체"])
                     else:
                         filtered_df = df
                         selected_subcategory = "전체"
                         selected_detailed = "전체"
                         
                         with col2:
-                            st.selectbox("중분류", ["전체"])
+                            st.selectbox("정비대상", ["전체"])
                         
                         with col3:
-                            st.selectbox("소분류", ["전체"])
+                            st.selectbox("정비작업", ["전체"])
                     
                     # 필터링된 정비내용 결합
                     filtered_text = ' '.join(filtered_df['정비내용'].dropna().astype(str))
@@ -1328,11 +1320,11 @@ if df is not None:
         def prepare_prediction_model(df):
             try:
                 # 기본 필드 검사
-                if not all(col in df.columns for col in ['브랜드', '모델명', '대분류', '중분류', '소분류', 'AS처리일수']):
+                if not all(col in df.columns for col in ['브랜드', '모델명', '작업유형', '정비대상', '정비작업', 'AS처리일수']):
                     return None, None, None, None, None, None, None, None, None
             
                 # 모델 학습을 위한 데이터 준비
-                model_df = df.dropna(subset=['브랜드', '모델명', '대분류', '중분류', 'AS처리일수']).copy()
+                model_df = df.dropna(subset=['브랜드', '모델명', '작업유형', '정비대상', 'AS처리일수']).copy()
             
                 if len(model_df) < 100:  # 충분한 데이터가 있는지 확인
                     return None, None, None, None, None, None, None, None, None
@@ -1346,12 +1338,12 @@ if df is not None:
                 
                 model_df['브랜드_인코딩'] = le_brand.fit_transform(model_df['브랜드'])
                 model_df['모델_인코딩'] = le_model.fit_transform(model_df['모델명'])
-                model_df['대분류_인코딩'] = le_category.fit_transform(model_df['대분류'])
-                model_df['중분류_인코딩'] = le_subcategory.fit_transform(model_df['중분류'])
-                model_df['소분류_인코딩'] = le_detail.fit_transform(model_df['소분류'])
+                model_df['작업유형_인코딩'] = le_category.fit_transform(model_df['작업유형'])
+                model_df['정비대상_인코딩'] = le_subcategory.fit_transform(model_df['정비대상'])
+                model_df['정비작업_인코딩'] = le_detail.fit_transform(model_df['정비작업'])
             
                 # 기타 수치형 변수 포함
-                features = ['브랜드_인코딩', '모델_인코딩', '대분류_인코딩', '중분류_인코딩', '소분류_인코딩', 'AS처리일수']
+                features = ['브랜드_인코딩', '모델_인코딩', '작업유형_인코딩', '정비대상_인코딩', '정비작업_인코딩', 'AS처리일수']
             
                 # 재정비 기간 예측을 위한 타겟 설정
                 model_df['재정비간격_타겟'] = model_df['재정비간격'].fillna(365)  # 결측값은 1년으로 대체
@@ -1366,17 +1358,17 @@ if df is not None:
                 rf_interval_model.fit(X_train, y_train)
             
                 # 2. 고장 유형 예측 모델 (분류) - 각 고장 유형 레벨별로 별도의 모델 구축
-                # 대분류 예측 모델
+                # 작업유형 예측 모델
                 category_model = RandomForestClassifier(n_estimators=100, random_state=42)
-                category_model.fit(X, model_df['대분류_인코딩'])
+                category_model.fit(X, model_df['작업유형_인코딩'])
                 
-                # 중분류 예측 모델
+                # 정비대상 예측 모델
                 subcategory_model = RandomForestClassifier(n_estimators=100, random_state=42)
-                subcategory_model.fit(X, model_df['중분류_인코딩'])
+                subcategory_model.fit(X, model_df['정비대상_인코딩'])
             
-                # 소분류 예측 모델
+                # 정비작업 예측 모델
                 detail_model = RandomForestClassifier(n_estimators=100, random_state=42)
-                detail_model.fit(X, model_df['소분류_인코딩'])
+                detail_model.fit(X, model_df['정비작업_인코딩'])
                 
                 return (rf_interval_model, category_model, subcategory_model, detail_model, 
                        le_brand, le_model, le_category, le_subcategory, le_detail)
@@ -1414,7 +1406,7 @@ if df is not None:
             
                 with col1:
                     st.write(f"**최근 정비일:** {latest_record['정비일자'].strftime('%Y-%m-%d')}")
-                    st.write(f"**고장 유형:** {latest_record['대분류']} > {latest_record['중분류']} > {latest_record['소분류']}")
+                    st.write(f"**고장 유형:** {latest_record['작업유형']} > {latest_record['정비대상']} > {latest_record['정비작업']}")
             
                 with col2:
                     st.write(f"**정비 내용:** {latest_record.get('정비내용', '정보 없음')}")
@@ -1432,9 +1424,9 @@ if df is not None:
                         latest_data = df[(df['브랜드'] == selected_brand) & (df['모델명'] == selected_model)].sort_values('정비일자', ascending=False).iloc[0]
                         
                         # 인코딩
-                        category_code = le_category.transform([latest_data['대분류']])[0]
-                        subcat_code = le_subcategory.transform([latest_data['중분류']])[0]
-                        detail_code = le_detail.transform([latest_data['소분류']])[0]
+                        category_code = le_category.transform([latest_data['작업유형']])[0]
+                        subcat_code = le_subcategory.transform([latest_data['정비대상']])[0]
+                        detail_code = le_detail.transform([latest_data['정비작업']])[0]
                         
                         # AS 처리일수 - 해당 모델 및 브랜드의 평균 사용
                         avg_repair_days = df[(df['브랜드'] == selected_brand) & (df['모델명'] == selected_model)]['AS처리일수'].mean()
@@ -1494,9 +1486,9 @@ if df is not None:
                             st.subheader("고장 유형 예측")
                         
                             st.markdown(f"""
-                            **대분류**: {predicted_category}  
-                            **중분류**: {predicted_subcategory}  
-                            **소분류**: {predicted_detail}
+                            **작업유형**: {predicted_category}  
+                            **정비대상**: {predicted_subcategory}  
+                            **정비작업**: {predicted_detail}
                             """)
                     
                     except Exception as e:
@@ -1506,7 +1498,7 @@ if df is not None:
             st.warning("""
             예측 모델을 준비할 수 없습니다. 다음 사항을 확인해주세요:
             1. 충분한 데이터(최소 100개 이상의 기록)가 있는지 확인
-            2. 필요한 컬럼(브랜드, 모델명, 대분류, 중분류, 소분류, AS처리일수)이 모두 있는지 확인
+            2. 필요한 컬럼(브랜드, 모델명, 작업유형, 정비대상, 정비작업, AS처리일수)이 모두 있는지 확인
             3. 재정비 간격 정보가 있는지 확인
             """)
 

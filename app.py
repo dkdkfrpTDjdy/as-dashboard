@@ -795,9 +795,9 @@ if df is not None:
                     with col1:
                         # 운전방식별 AS 건수
                         st.subheader("운전방식별 AS 건수")
-                        driving_type_counts = df['운전방식'].value_counts().dropna()
+                        driving_type_counts = df['운전방식'].value_counts().head(15)
                         
-                        if len(driving_type_counts) > 10:
+                        if len(driving_type_counts) > 0:
                             fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
                             sns.barplot(x=driving_type_counts.index, y=driving_type_counts.values, ax=ax, palette=f"{current_theme}_r")
                             
@@ -857,7 +857,7 @@ if df is not None:
                     with col1:
                         # 적재용량별 AS 건수
                         st.subheader("적재용량별 AS 건수")
-                        load_capacity_counts = df['적재용량'].value_counts().dropna()
+                        load_capacity_counts = df['적재용량'].value_counts().head(15)
                         
                         if len(load_capacity_counts) > 0:
                             fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
@@ -918,9 +918,9 @@ if df is not None:
                     with col1:
                         # 마스트형태별 AS 건수
                         st.subheader("마스트형태별 AS 건수")
-                        mast_type_counts = df['마스트형'].value_counts().dropna()
+                        mast_type_counts = df['마스트형'].value_counts().head(15)
                         
-                        if len(mast_type_counts) > 100:
+                        if len(mast_type_counts) > 0:
                             fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
                             sns.barplot(x=mast_type_counts.index, y=mast_type_counts.values, ax=ax, palette=f"{current_theme}_r")
                             

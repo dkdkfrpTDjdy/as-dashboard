@@ -758,7 +758,7 @@ if df is not None:
                         st.subheader("연료별 고장유형")
                         
                         # 연료 선택
-                        fuel_types = ["전체"] + sorted(df['연료'].dropna().unique().tolist())
+                        fuel_types = ["전체"] + sorted(df['연료'].value_counts().index.tolist()
                         selected_fuel = st.selectbox("연료", fuel_types)
                         
                         if selected_fuel != "전체":
@@ -820,7 +820,7 @@ if df is not None:
                         st.subheader("운전방식별 고장유형")
                         
                         # 운전방식 선택
-                        driving_types = ["전체"] + sorted(df['운전방식'].dropna().unique().tolist())
+                        driving_types = ["전체"] + df['운전방식'].value_counts().index.tolist()
                         selected_driving = st.selectbox("운전방식", driving_types)
                         
                         if selected_driving != "전체":
@@ -881,7 +881,7 @@ if df is not None:
                         st.subheader("적재용량별 고장유형")
                         
                         # 적재용량 선택
-                        load_capacities = ["전체"] + sorted(df['적재용량'].dropna().unique().tolist())
+                        load_capacities = ["전체"] + sorted(df['적재용량'].value_counts().index.tolist()
                         selected_capacity = st.selectbox("적재용량", load_capacities)
                         
                         if selected_capacity != "전체":
@@ -942,7 +942,7 @@ if df is not None:
                         st.subheader("마스트형태별 고장유형")
                         
                         # 마스트형태 선택
-                        mast_types = ["전체"] + sorted(df['마스트형'].dropna().unique().tolist())
+                        mast_types = ["전체"] + sorted(df['마스트형'].value_counts().index.tolist()
                         selected_mast = st.selectbox("마스트형태", mast_types)
                         
                         if selected_mast != "전체":

@@ -107,9 +107,6 @@ st.sidebar.title("산업장비 AS 데이터 분석")
 uploaded_file1 = st.sidebar.file_uploader("AS 데이터 파일 업로드", type=["xlsx"])
 uploaded_file2 = st.sidebar.file_uploader("자산조회 파일 업로드", type=["xlsx"])
 
-# 샘플 데이터 사용 옵션
-use_sample_data = st.sidebar.checkbox("샘플 데이터 사용하기", False)
-
 # 데이터 로드 함수
 @st.cache_data
 def load_data(file):
@@ -169,7 +166,7 @@ def merge_dataframes(df1, df2):
 if uploaded_file1 is not None:
     df1 = load_data(uploaded_file1)
     file_name1 = uploaded_file1.name
-    
+
     if uploaded_file2 is not None:
         df2 = load_data(uploaded_file2)
         # 두 데이터프레임 병합
@@ -184,36 +181,9 @@ if uploaded_file1 is not None:
         df = df1
         file_name = file_name1
         st.sidebar.warning("장비 정보 파일이 업로드되지 않았습니다. AS 데이터만 사용합니다.")
-elif use_sample_data:
-    # 샘플 데이터 경로 (실행 환경에 맞게 수정)
-    sample_file_path = "고소장비_AS_최종.xlsx"
-    try:
-        df = pd.read_excel(sample_file_path)
-        file_name = "고소장비_AS_최종.xlsx"
-    except:
-        st.error("샘플 데이터 파일을 찾을 수 없습니다. 파일을 업로드하거나 경로를 확인해주세요.")
-        df = None
-        file_name = None
 else:
     df = None
     file_name = None
-
-# 사이드바에 폰트 디버깅 옵션 추가
-st.sidebar.subheader("폰트 정보")
-if st.sidebar.checkbox("폰트 정보 표시"):
-    # 폰트 관련 정보 표시
-    st.write("폰트 경로:", font_path)
-    st.write("폰트 파일 존재 여부:", os.path.exists(font_path) if font_path else "폰트 경로 없음")
-    
-    # 사용 가능한 폰트 목록 조회
-    try:
-        font_list = sorted([f.name for f in fm.fontManager.ttflist])
-        st.write(f"시스템에 설치된 폰트 수: {len(font_list)}")
-        if st.checkbox("모든 폰트 보기"):
-            st.write("사용 가능한 폰트 목록:")
-            st.write(font_list)
-    except Exception as e:
-        st.error(f"폰트 목록 조회 오류: {e}")
 
 # 데이터가 로드된 경우 분석 시작
 if df is not None:

@@ -104,8 +104,8 @@ color_themes = {
 st.sidebar.title("데이터 업로드 및 메뉴 클릭")
 
 # 파일 업로더 - 두 개의 파일 업로드 기능 추가
-uploaded_file1 = st.sidebar.file_uploader("**AS 데이터 업로드**", type=["xlsx"])
-uploaded_file2 = st.sidebar.file_uploader("**자산조회 파일 업로드**", type=["xlsx"])
+uploaded_file1 = st.sidebar.file_uploader("**AS 데이터 업로드**: 구ERP > 자산관리 > 정비관리 > 건설장비AS", type=["xlsx"])
+uploaded_file2 = st.sidebar.file_uploader("**자산조회 파일 업로드**: SAP > 자산조회", type=["xlsx"])
 
 # 데이터 로드 함수
 @st.cache_data
@@ -162,7 +162,6 @@ def merge_dataframes(df1, df2):
         st.error(f"데이터 병합 중 오류 발생: {e}")
         return df1  # 오류 발생시 원본 데이터프레임 반환
 
-# 샘플 데이터 경로 또는 업로드된 파일 사용
 if uploaded_file1 is not None:
     df1 = load_data(uploaded_file1)
     file_name1 = uploaded_file1.name
@@ -1494,6 +1493,4 @@ else:
     3. **브랜드/모델 분석**: 브랜드 및 모델별 특성 분석
     4. **정비내용 텍스트 분석**: 정비내용 워드클라우드 및 분류별 정비내용 분석
     5. **고장 예측**: 기계학습 모델을 활용한 재정비 기간 및 증상 예측
-    6. **AS 데이터 출처**: 구 ERP > 자산관리 > 정비관리 > 건설장비AS
-    7. **자산조회 데이터 출처**:  SAP > 자산조회
     """)

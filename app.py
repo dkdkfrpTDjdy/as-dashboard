@@ -1339,8 +1339,8 @@ if df is not None:
                     else:
                         return "2021-2025"
 
-                df['제조년도_구간'] = df['제조년도_정수'].apply(year_to_range)
-                df['제조년도_구간_인코딩'] = LabelEncoder().fit_transform(df['제조년도_구간'])
+                model_df['제조년도_구간'] = model_df['제조년도_정수'].apply(year_to_range)
+                model_df['제조년도_구간_인코딩'] = LabelEncoder().fit_transform(model_df['제조년도_구간'])
 
                 # 피처
                 features = ['브랜드_인코딩', '모델_인코딩', '작업유형_인코딩', '정비대상_인코딩', '정비작업_인코딩', 'AS처리일수', '제조년도_구간_인코딩']

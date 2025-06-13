@@ -1396,9 +1396,6 @@ if df is not None:
         filtered_df = df[(df['브랜드'] == selected_brand) & (df['모델명'] == selected_model)]
 
         if not filtered_df.empty:
-            # 관리번호 선택 or 직접입력
-            # 관리번호 선택 or 직접입력
-            st.markdown("관리번호 (선택)")
             col_id_sel, col_id_input = st.columns(2)
 
             with col_id_sel:
@@ -1408,11 +1405,16 @@ if df is not None:
             with col_id_input:
                 manual_id = st.text_input("관리번호 입력", value="")
 
-            final_id = manual_id if manual_id else selected_id
+            # 우선순위: 수동 입력값이 우선, 없으면 selectbox 값 사용
+            final_id = manual_id.strip() if manual_id.strip() else selected_id
+
+            if final_id:
+                st.success(f"선택된 관리번호: {final_id}")
+            else:
+                st.warning("관리번호를 선택하거나 직접 입력해주세요.")
 
             # 제조년도 선택 (구간 기반)
             if '제조년도' in filtered_df.columns:
-                st.markdown("제조년도 (선택)")
 
                 # 소숫점 제거 및 정수화
                 years = filtered_df['제조년도'].dropna().astype(int)
@@ -1432,7 +1434,7 @@ if df is not None:
 
                 # 구간 리스트 생성
                 year_ranges = sorted(set(year_to_range(y) for y in years))
-                selected_year_range = st.selectbox("제조년도 구간을 선택하세요", year_ranges)
+                selected_year_range = st.selectbox("제조년도(선택)", year_ranges)
 
                 # 구간을 대표 정수형 연도로 변환
                 year_range_to_int = {

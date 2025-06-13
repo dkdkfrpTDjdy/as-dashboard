@@ -1432,7 +1432,7 @@ if df is not None:
 
                 # 구간 리스트 생성
                 year_ranges = sorted(set(year_to_range(y) for y in years))
-                selected_year_range = st.selectbox(year_ranges)
+                selected_year_range = st.selectbox("제조년도 구간을 선택하세요", year_ranges)
 
                 # 구간을 대표 정수형 연도로 변환
                 year_range_to_int = {

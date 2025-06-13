@@ -1387,7 +1387,7 @@ if df is not None:
 
         with col2:
             brand_models = df[df['브랜드'] == selected_brand]['모델명'].unique()
-            selected_model = st.selectbox("모델", brand_models)
+            selected_model = st.selectbox("모델(필수)", brand_models)
 
         # 브랜드/모델 선택 이후 필터링
         filtered_df = df[(df['브랜드'] == selected_brand) & (df['모델명'] == selected_model)]
@@ -1395,11 +1395,11 @@ if df is not None:
         if not filtered_df.empty:
             with col3:
                 existing_ids = filtered_df['관리번호'].dropna().unique()
-                selected_id = st.selectbox("관리번호 선택", [""] + list(existing_ids))
+                selected_id = st.selectbox("관리번호(선택)", [""] + list(existing_ids))
             
             with col4:
                 id_placeholder = f"예: {existing_ids[0]}" if len(existing_ids) > 0 else ""
-                input_id = st.text_input("관리번호 직접 입력", placeholder=id_placeholder).strip()
+                input_id = st.text_input("관리번호(직접 입력)", placeholder=id_placeholder).strip()
                 # 선택된 ID 또는 입력된 ID 사용
                 final_id = selected_id if selected_id else input_id
     

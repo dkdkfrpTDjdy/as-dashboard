@@ -11,35 +11,6 @@ st.set_page_config(
     page_title="산업장비 AS 분석 대시보드",
     layout="wide"
 )
- 
-# 브랜드 약자와 전체 이름 매핑 딕셔너리
-brand_mapping = {
-    'BY': 'BYD',
-    'CL': '클라크',
-    'CR': '크라운',
-    'CT': 'CATERPILLAR',
-    'DS': '두산',
-    'DW': '대우',
-    'HD': '현대',
-    'YA': 'YALE-HYSTER',
-    'YH': 'YALE-HYSTER',
-    'HS': 'YALE-HYSTER',
-    'HE': 'JUNGHEINRICH',
-    'JH': 'JUNGHEINRICH',
-    'KC': 'KARCHER',
-    'KM': 'KOMATSU',
-    'NC': '닛찌유',
-    'NP': 'NILFISK',
-    'NS': '닛산',
-    'RM': '레이몬드',
-    'SM': '수미토모',
-    'SS': '수성',
-    'ST': '스틸',
-    'TC': 'TCM',
-    'TM': '티엠씨엘에프',
-    'TV': 'TOVICA',
-    'TY': '도요타'
-} 
 
 def setup_korean_font_test():
     # 1. 프로젝트 내 포함된 폰트 우선 적용
@@ -132,8 +103,9 @@ color_themes = {
 # 사이드바 설정
 st.sidebar.title("산업장비 AS 데이터 분석")
 
-# 파일 업로더
-uploaded_file = st.sidebar.file_uploader("파일 업로드", type=["xlsx"])
+# 파일 업로더 - 두 개의 파일 업로드 기능 추가
+uploaded_file1 = st.sidebar.file_uploader("AS 데이터 파일 업로드", type=["xlsx"])
+uploaded_file2 = st.sidebar.file_uploader("장비 정보 파일 업로드", type=["xlsx"])
 
 # 샘플 데이터 사용 옵션
 use_sample_data = st.sidebar.checkbox("샘플 데이터 사용하기", False)
@@ -147,17 +119,6 @@ def load_data(file):
     except Exception as e:
         st.error(f"파일 로드 오류: {e}")
         return None
-
-# 브랜드 추출 함수
-def extract_brand(code):
-    if pd.isna(code) or code == '':
-        return '기타'
-        
-    code_str = str(code)
-    brand_code = ''.join(filter(str.isalpha, code_str))[:2]
-    
-    # 브랜드 매핑 적용 (매핑에 없으면 '기타'로 처리)
-    return brand_mapping.get(brand_code, '기타')
 
 # 지역 추출 함수
 def extract_first_two_chars(address):
@@ -178,10 +139,51 @@ def group_small_categories(series, threshold=0.03):
         return pd.concat([series[~mask], others])
     return series
 
+# 두 데이터프레임 병합 함수
+def merge_dataframes(df1, df2):
+    if df1 is None or df2 is None:
+        return None
+    
+    try:
+        # 관리번호 컬럼을 기준으로 두 데이터프레임 병합
+        # 필요한 컬럼만 선택하여 병합
+        df2_subset = df2[['관리번호', '제조사명', '제조년도', '취득가', '자재내역']]
+        
+        # 왼쪽 조인으로 병합 (AS 데이터는 모두 유지)
+        merged_df = pd.merge(df1, df2_subset, on='관리번호', how='left')
+        
+        # 중복 행 제거
+        merged_df = merged_df.drop_duplicates()
+        
+        # 자재내역 컬럼 분할
+        if '자재내역' in merged_df.columns:
+            # 자재내역에서 추가 정보 추출 (공백으로 나누기)
+            merged_df[['연료형태', '운전방식', '적재용량', '마스트형']] = merged_df['자재내역'].str.split(' ', n=3, expand=True)
+        
+        return merged_df
+    except Exception as e:
+        st.error(f"데이터 병합 중 오류 발생: {e}")
+        return df1  # 오류 발생시 원본 데이터프레임 반환
+
 # 샘플 데이터 경로 또는 업로드된 파일 사용
-if uploaded_file is not None:
-    df = load_data(uploaded_file)
-    file_name = uploaded_file.name
+if uploaded_file1 is not None:
+    df1 = load_data(uploaded_file1)
+    file_name1 = uploaded_file1.name
+    
+    if uploaded_file2 is not None:
+        df2 = load_data(uploaded_file2)
+        # 두 데이터프레임 병합
+        df = merge_dataframes(df1, df2)
+        if df is not None:
+            st.sidebar.success("두 파일이 성공적으로 병합되었습니다.")
+            file_name = f"{file_name1} (병합됨)"
+        else:
+            df = df1
+            file_name = file_name1
+    else:
+        df = df1
+        file_name = file_name1
+        st.sidebar.warning("장비 정보 파일이 업로드되지 않았습니다. AS 데이터만 사용합니다.")
 elif use_sample_data:
     # 샘플 데이터 경로 (실행 환경에 맞게 수정)
     sample_file_path = "고소장비_AS_최종.xlsx"
@@ -241,8 +243,11 @@ if df is not None:
         # 30일 내 재정비 여부
         df['30일내재정비'] = (df['재정비간격'] <= 30) & (df['재정비간격'] > 0)
         
-        # 브랜드 추출 및 매핑 적용
-        df['브랜드'] = df['관리번호'].apply(extract_brand)
+        # 브랜드 컬럼 처리 - 제조사명 컬럼이 있으면 그것을 사용, 없으면 '기타'로 채움
+        if '제조사명' in df.columns:
+            df['브랜드'] = df['제조사명'].fillna('기타')
+        else:
+            df['브랜드'] = '기타'
         
         # 지역 추출
         if 'ADDR' in df.columns:
@@ -554,11 +559,10 @@ if df is not None:
                 
         st.markdown("---")
         
-        # 4. 현장 지도 (전체 너비로 표시)
-        st.subheader("현장 지도")
-        
-        # 좌표 데이터 확인
+        # 4. 현장 지도 (전체 너비로 표시) - 경도/위도 컬럼이 있는 경우에만 표시
         if all(col in df.columns for col in ['경도', '위도']):
+            st.subheader("현장 지도")
+            
             # NA 값 제거 - 좌표가 없는 데이터는 제외
             df_map = df.dropna(subset=['경도', '위도']).copy()
             
@@ -637,8 +641,6 @@ if df is not None:
                 folium_static(m, width=1200, height=600)
             else:
                 st.warning("지도에 표시할 좌표 데이터가 없습니다.")
-        else:
-            st.warning("위도/경도 정보가 데이터에 없습니다. 지도 시각화가 불가능합니다.")
     
     elif menu == "고장 유형 분석":
         st.title("고장 유형 분석")
@@ -728,7 +730,257 @@ if df is not None:
                 except Exception as e:
                     st.error(f"히트맵 생성 중 오류가 발생했습니다: {e}")
                     st.info("선택한 필터에 맞는 데이터가 충분하지 않을 수 있습니다.")
+
+            # 자재내역 분석 섹션 추가 - 자재내역 컬럼이 있는 경우만 표시
+            st.subheader("자재내역 분석")
             
+            # 탭으로 분석 항목 구분
+            tabs = st.tabs(["연료형태별 분석", "운전방식별 분석", "적재용량별 분석", "마스트형태별 분석"])
+            
+            # 연료형태별 분석
+            with tabs[0]:
+                if '연료형태' in df.columns:
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        # 연료형태별 AS 건수
+                        st.subheader("연료형태별 AS 건수")
+                        fuel_type_counts = df['연료형태'].value_counts().dropna()
+                        
+                        if len(fuel_type_counts) > 0:
+                            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+                            sns.barplot(x=fuel_type_counts.index, y=fuel_type_counts.values, ax=ax, palette=f"{current_theme}_r")
+                            
+                            # 막대 위에 텍스트 표시
+                            for i, v in enumerate(fuel_type_counts.values):
+                                ax.text(i, v + max(fuel_type_counts.values) * 0.02, str(v),
+                                      ha='center', fontsize=12)
+                                
+                            plt.tight_layout()
+                            st.pyplot(fig, use_container_width=True)
+                            
+                            # 다운로드 링크 추가
+                            st.markdown(get_image_download_link(fig, '연료형태별_AS_건수.png', '연료형태별 AS 건수 다운로드'), unsafe_allow_html=True)
+                        else:
+                            st.warning("연료형태 데이터가 없습니다.")
+                    
+                    with col2:
+                        # 연료형태별 고장유형 Top 10
+                        st.subheader("연료형태별 고장유형 (상위 고장유형)")
+                        
+                        # 연료형태 선택
+                        fuel_types = ["전체"] + sorted(df['연료형태'].dropna().unique().tolist())
+                        selected_fuel = st.selectbox("연료형태", fuel_types)
+                        
+                        if selected_fuel != "전체":
+                            filtered_df_fuel = df[df['연료형태'] == selected_fuel]
+                        else:
+                            filtered_df_fuel = df
+                            
+                        if '고장유형' in filtered_df_fuel.columns:
+                            top_faults_by_fuel = filtered_df_fuel['고장유형'].value_counts().head(10)
+                            
+                            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+                            sns.barplot(x=top_faults_by_fuel.values, y=top_faults_by_fuel.index, ax=ax, palette=f"{current_theme}_r")
+                            
+                            # 막대 위에 텍스트 표시
+                            for i, v in enumerate(top_faults_by_fuel.values):
+                                ax.text(v + max(top_faults_by_fuel.values) * 0.02, i, str(v),
+                                      va='center', fontsize=12)
+                                
+                            plt.tight_layout()
+                            st.pyplot(fig, use_container_width=True)
+                            
+                            # 다운로드 링크 추가
+                            st.markdown(get_image_download_link(fig, f'{selected_fuel}_고장유형_TOP10.png', f'{selected_fuel} 고장유형 TOP10 다운로드'), unsafe_allow_html=True)
+                        else:
+                            st.warning("고장유형 데이터가 없습니다.")
+                else:
+                    st.warning("연료형태 데이터가 없습니다.")
+            
+            # 운전방식별 분석
+            with tabs[1]:
+                if '운전방식' in df.columns:
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        # 운전방식별 AS 건수
+                        st.subheader("운전방식별 AS 건수")
+                        driving_type_counts = df['운전방식'].value_counts().dropna()
+                        
+                        if len(driving_type_counts) > 0:
+                            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+                            sns.barplot(x=driving_type_counts.index, y=driving_type_counts.values, ax=ax, palette=f"{current_theme}_r")
+                            
+                            # 막대 위에 텍스트 표시
+                            for i, v in enumerate(driving_type_counts.values):
+                                ax.text(i, v + max(driving_type_counts.values) * 0.02, str(v),
+                                      ha='center', fontsize=12)
+                                
+                            plt.tight_layout()
+                            st.pyplot(fig, use_container_width=True)
+                            
+                            # 다운로드 링크 추가
+                            st.markdown(get_image_download_link(fig, '운전방식별_AS_건수.png', '운전방식별 AS 건수 다운로드'), unsafe_allow_html=True)
+                        else:
+                            st.warning("운전방식 데이터가 없습니다.")
+                    
+                    with col2:
+                        # 운전방식별 고장유형 Top 10
+                        st.subheader("운전방식별 고장유형 (상위 고장유형)")
+                        
+                        # 운전방식 선택
+                        driving_types = ["전체"] + sorted(df['운전방식'].dropna().unique().tolist())
+                        selected_driving = st.selectbox("운전방식", driving_types)
+                        
+                        if selected_driving != "전체":
+                            filtered_df_driving = df[df['운전방식'] == selected_driving]
+                        else:
+                            filtered_df_driving = df
+                            
+                        if '고장유형' in filtered_df_driving.columns:
+                            top_faults_by_driving = filtered_df_driving['고장유형'].value_counts().head(10)
+                            
+                            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+                            sns.barplot(x=top_faults_by_driving.values, y=top_faults_by_driving.index, ax=ax, palette=f"{current_theme}_r")
+                            
+                            # 막대 위에 텍스트 표시
+                            for i, v in enumerate(top_faults_by_driving.values):
+                                ax.text(v + max(top_faults_by_driving.values) * 0.02, i, str(v),
+                                      va='center', fontsize=12)
+                                
+                            plt.tight_layout()
+                            st.pyplot(fig, use_container_width=True)
+                            
+                            # 다운로드 링크 추가
+                            st.markdown(get_image_download_link(fig, f'{selected_driving}_고장유형_TOP10.png', f'{selected_driving} 고장유형 TOP10 다운로드'), unsafe_allow_html=True)
+                        else:
+                            st.warning("고장유형 데이터가 없습니다.")
+                else:
+                    st.warning("운전방식 데이터가 없습니다.")
+
+            # 적재용량별 분석
+            with tabs[2]:
+                if '적재용량' in df.columns:
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        # 적재용량별 AS 건수
+                        st.subheader("적재용량별 AS 건수")
+                        load_capacity_counts = df['적재용량'].value_counts().dropna()
+                        
+                        if len(load_capacity_counts) > 0:
+                            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+                            sns.barplot(x=load_capacity_counts.index, y=load_capacity_counts.values, ax=ax, palette=f"{current_theme}_r")
+                            
+                            # 막대 위에 텍스트 표시
+                            for i, v in enumerate(load_capacity_counts.values):
+                                ax.text(i, v + max(load_capacity_counts.values) * 0.02, str(v),
+                                      ha='center', fontsize=12)
+                                
+                            plt.tight_layout()
+                            st.pyplot(fig, use_container_width=True)
+                            
+                            # 다운로드 링크 추가
+                            st.markdown(get_image_download_link(fig, '적재용량별_AS_건수.png', '적재용량별 AS 건수 다운로드'), unsafe_allow_html=True)
+                        else:
+                            st.warning("적재용량 데이터가 없습니다.")
+                    
+                    with col2:
+                        # 적재용량별 고장유형 Top 10
+                        st.subheader("적재용량별 고장유형 (상위 고장유형)")
+                        
+                        # 적재용량 선택
+                        load_capacities = ["전체"] + sorted(df['적재용량'].dropna().unique().tolist())
+                        selected_capacity = st.selectbox("적재용량", load_capacities)
+                        
+                        if selected_capacity != "전체":
+                            filtered_df_capacity = df[df['적재용량'] == selected_capacity]
+                        else:
+                            filtered_df_capacity = df
+                            
+                        if '고장유형' in filtered_df_capacity.columns:
+                            top_faults_by_capacity = filtered_df_capacity['고장유형'].value_counts().head(10)
+                            
+                            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+                            sns.barplot(x=top_faults_by_capacity.values, y=top_faults_by_capacity.index, ax=ax, palette=f"{current_theme}_r")
+                            
+                            # 막대 위에 텍스트 표시
+                            for i, v in enumerate(top_faults_by_capacity.values):
+                                ax.text(v + max(top_faults_by_capacity.values) * 0.02, i, str(v),
+                                      va='center', fontsize=12)
+                                
+                            plt.tight_layout()
+                            st.pyplot(fig, use_container_width=True)
+                            
+                            # 다운로드 링크 추가
+                            st.markdown(get_image_download_link(fig, f'{selected_capacity}_고장유형_TOP10.png', f'{selected_capacity} 고장유형 TOP10 다운로드'), unsafe_allow_html=True)
+                        else:
+                            st.warning("고장유형 데이터가 없습니다.")
+                else:
+                    st.warning("적재용량 데이터가 없습니다.")
+
+            # 마스트형태별 분석
+            with tabs[3]:
+                if '마스트형' in df.columns:
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        # 마스트형태별 AS 건수
+                        st.subheader("마스트형태별 AS 건수")
+                        mast_type_counts = df['마스트형'].value_counts().dropna()
+                        
+                        if len(mast_type_counts) > 0:
+                            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+                            sns.barplot(x=mast_type_counts.index, y=mast_type_counts.values, ax=ax, palette=f"{current_theme}_r")
+                            
+                            # 막대 위에 텍스트 표시
+                            for i, v in enumerate(mast_type_counts.values):
+                                ax.text(i, v + max(mast_type_counts.values) * 0.02, str(v),
+                                      ha='center', fontsize=12)
+                                
+                            plt.tight_layout()
+                            st.pyplot(fig, use_container_width=True)
+                            
+                            # 다운로드 링크 추가
+                            st.markdown(get_image_download_link(fig, '마스트형태별_AS_건수.png', '마스트형태별 AS 건수 다운로드'), unsafe_allow_html=True)
+                        else:
+                            st.warning("마스트형태 데이터가 없습니다.")
+                    
+                    with col2:
+                        # 마스트형태별 고장유형 Top 10
+                        st.subheader("마스트형태별 고장유형 (상위 고장유형)")
+                        
+                        # 마스트형태 선택
+                        mast_types = ["전체"] + sorted(df['마스트형'].dropna().unique().tolist())
+                        selected_mast = st.selectbox("마스트형태", mast_types)
+                        
+                        if selected_mast != "전체":
+                            filtered_df_mast = df[df['마스트형'] == selected_mast]
+                        else:
+                            filtered_df_mast = df
+                            
+                        if '고장유형' in filtered_df_mast.columns:
+                            top_faults_by_mast = filtered_df_mast['고장유형'].value_counts().head(10)
+                            
+                            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+                            sns.barplot(x=top_faults_by_mast.values, y=top_faults_by_mast.index, ax=ax, palette=f"{current_theme}_r")
+                            
+                            # 막대 위에 텍스트 표시
+                            for i, v in enumerate(top_faults_by_mast.values):
+                                ax.text(v + max(top_faults_by_mast.values) * 0.02, i, str(v),
+                                      va='center', fontsize=12)
+                                
+                            plt.tight_layout()
+                            st.pyplot(fig, use_container_width=True)
+                            
+                            # 다운로드 링크 추가
+                            st.markdown(get_image_download_link(fig, f'{selected_mast}_고장유형_TOP10.png', f'{selected_mast} 고장유형 TOP10 다운로드'), unsafe_allow_html=True)
+                        else:
+                            st.warning("고장유형 데이터가 없습니다.")
+                else:
+                    st.warning("마스트형태 데이터가 없습니다.")
+                    
             # 상위 고장 유형 리스트
             st.subheader("상위 고장 유형")
             top_40_faults = filtered_df['고장유형'].value_counts().nlargest(40)
@@ -843,6 +1095,61 @@ if df is not None:
                 
                 # 다운로드 링크 추가
                 st.markdown(get_image_download_link(fig, f'{selected_brand}_고장유형_분석.png', f'{selected_brand} 고장유형 분석 다운로드'), unsafe_allow_html=True)
+
+        # 제조년도별 분석 추가
+        if '제조년도' in df.columns:
+            st.subheader("제조년도별 분석")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # 제조년도별 AS 건수
+                year_counts = df['제조년도'].dropna().astype(int).value_counts().sort_index()
+                
+                if len(year_counts) > 0:
+                    fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+                    sns.barplot(x=year_counts.index.astype(str), y=year_counts.values, ax=ax, palette=f"{current_theme}_r")
+                    
+                    # 막대 위에 텍스트 표시
+                    for i, v in enumerate(year_counts.values):
+                        ax.text(i, v + max(year_counts.values) * 0.02, str(v),
+                               ha='center', fontsize=12)
+                    
+                    plt.xticks(rotation=45)
+                    plt.title("제조년도별 AS 건수")
+                    plt.tight_layout()
+                    st.pyplot(fig, use_container_width=True)
+                    
+                    # 다운로드 링크 추가
+                    st.markdown(get_image_download_link(fig, '제조년도별_AS_건수.png', '제조년도별 AS 건수 다운로드'), unsafe_allow_html=True)
+                else:
+                    st.warning("제조년도 데이터가 없습니다.")
+            
+            with col2:
+                # 제조년도별 평균 AS 처리일수
+                if 'AS처리일수' in df.columns:
+                    df_clean = df.dropna(subset=['제조년도', 'AS처리일수'])
+                    if len(df_clean) > 0:
+                        year_avg_days = df_clean.groupby('제조년도')['AS처리일수'].mean().sort_index()
+                        
+                        fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+                        sns.barplot(x=year_avg_days.index.astype(str), y=year_avg_days.values, ax=ax, palette=f"{current_theme}")
+                        
+                        # 막대 위에 텍스트 표시
+                        for i, v in enumerate(year_avg_days.values):
+                            ax.text(i, v + max(year_avg_days.values) * 0.02, f"{v:.1f}",
+                                   ha='center', fontsize=12)
+                        
+                        plt.xticks(rotation=45)
+                        plt.title("제조년도별 평균 AS 처리일수")
+                        plt.tight_layout()
+                        st.pyplot(fig, use_container_width=True)
+                        
+                        # 다운로드 링크 추가
+                        st.markdown(get_image_download_link(fig, '제조년도별_평균처리일수.png', '제조년도별 평균 처리일수 다운로드'), unsafe_allow_html=True)
+                    else:
+                        st.warning("제조년도 및 AS처리일수 데이터가 충분하지 않습니다.")
+                else:
+                    st.warning("AS처리일수 데이터가 없습니다.")
 
     elif menu == "정비내용 텍스트 분석":
         st.title("정비내용 텍스트 분석")

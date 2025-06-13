@@ -654,8 +654,8 @@ if df is not None:
 
             for tab, colname in zip(tabs, category_tabs.values()):
                 with tab:
-                    st.subheader(f"분석 기준: {colname}")
-                    category_counts = df[colname].value_counts()
+                    st.subheader(f"{colname}")
+                    category_counts = df[colname].value_counts().head(15)
                     category_values = convert_to_str_list(df[colname].unique())
                     selected_category = st.selectbox(f"{colname} 선택", ["전체"] + sorted(category_values), key=f"sel_{colname}")
 
@@ -672,7 +672,7 @@ if df is not None:
                     col1, col2, col3 = st.columns(3)
 
                     with col1:
-                        st.markdown(f"**{colname} 분포 (Bar)**")
+                        st.markdown(f"**{colname} 분포**")
                         fig1, ax1 = create_figure_with_korean(figsize=(8, 7), dpi=300)
                         sns.barplot(x=category_counts.index, y=category_counts.values, ax=ax1, palette=f"{current_theme}_r")
                         plt.xticks(rotation=45, ha='right')
@@ -683,7 +683,7 @@ if df is not None:
                         st.markdown(get_image_download_link(fig1, f'고장유형_{colname}_분포.png', f'{colname} 분포 다운로드'), unsafe_allow_html=True)
 
                     with col2:
-                        st.markdown(f"**{colname}별 고장 유형 비율 (Pie)**")
+                        st.markdown(f"**{colname}별 고장 유형 비율**")
                         fig2, ax2 = create_figure_with_korean(figsize=(8, 8), dpi=300)
                         category_counts.plot(kind='pie', autopct='%1.1f%%', ax=ax2,
                                              colors=sns.color_palette(current_theme, n_colors=len(category_counts)))

@@ -1435,10 +1435,6 @@ if df is not None:
                     selected_year_range = ""
                     year_int = df['제조년도'].dropna().astype(int).mode().iloc[0]
 
-            if final_id:
-                st.success(f"선택된 관리번호: {final_id}")
-            else:
-                st.warning("관리번호를 입력해주세요.")
 
             # 해당 모델의 현재 상태에 관한 정보 표시
             filtered_df = df[(df['브랜드'] == selected_brand) & (df['모델명'] == selected_model)]

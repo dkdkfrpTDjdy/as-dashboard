@@ -654,32 +654,8 @@ if df is not None:
 
             for tab, colname in zip(tabs, category_tabs.values()):
                 with tab:
-                    st.subheader(f"고장 유형 분포 ({colname})")
-                    
+                    st.subheader(f"분석 기준: {colname}")
                     category_counts = df[colname].value_counts()
-                    
-                    # 막대 그래프
-                    fig1, ax1 = create_figure_with_korean(figsize=(8, 7), dpi=300)
-                    sns.barplot(x=category_counts.index, y=category_counts.values, ax=ax1, palette=f"{current_theme}_r")
-                    plt.xticks(rotation=45, ha='right')
-                    for i, v in enumerate(category_counts.values):
-                        ax1.text(i, v + max(category_counts.values) * 0.02, str(v), ha='center', fontsize=12)
-                    plt.tight_layout()
-                    st.pyplot(fig1, use_container_width=True)
-                    st.markdown(get_image_download_link(fig1, f'고장유형_{colname}_분포.png', f'고장유형 {colname} 분포 다운로드'), unsafe_allow_html=True)
-
-                    # 파이 차트
-                    st.subheader(f"{colname}별 고장 유형 비율")
-                    fig2, ax2 = create_figure_with_korean(figsize=(8, 8), dpi=300)
-                    category_counts.plot(kind='pie', autopct='%1.1f%%', ax=ax2, 
-                                         colors=sns.color_palette(current_theme, n_colors=len(category_counts)))
-                    ax2.set_ylabel('')
-                    plt.tight_layout()
-                    st.pyplot(fig2, use_container_width=True)
-                    st.markdown(get_image_download_link(fig2, f'고장유형_{colname}_비율.png', f'{colname} 비율 다운로드'), unsafe_allow_html=True)
-
-                    # 히트맵
-                    st.subheader(f"브랜드-모델 및 고장유형 (기준: {colname})")
                     category_values = convert_to_str_list(df[colname].unique())
                     selected_category = st.selectbox(f"{colname} 선택", ["전체"] + sorted(category_values), key=f"sel_{colname}")
 
@@ -690,27 +666,51 @@ if df is not None:
 
                     top_faults = filtered_df['고장유형'].value_counts().nlargest(15).index
                     df_filtered = filtered_df[filtered_df['고장유형'].isin(top_faults)]
-
                     top_combos = df_filtered['브랜드_모델'].value_counts().nlargest(15).index
                     df_filtered = df_filtered[df_filtered['브랜드_모델'].isin(top_combos)]
 
-                    try:
-                        pivot_df = df_filtered.pivot_table(
-                            index='고장유형',
-                            columns='브랜드_모델',
-                            aggfunc='size',
-                            fill_value=0
-                        )
-                        fig3, ax3 = create_figure_with_korean(figsize=(12, 10), dpi=300)
-                        sns.heatmap(pivot_df, cmap=current_theme, annot=True, fmt='d', linewidths=0.5, ax=ax3)
-                        plt.xticks(rotation=90)
-                        plt.yticks(rotation=0)
+                    col1, col2, col3 = st.columns(3)
+
+                    with col1:
+                        st.markdown(f"**{colname} 분포 (Bar)**")
+                        fig1, ax1 = create_figure_with_korean(figsize=(8, 7), dpi=300)
+                        sns.barplot(x=category_counts.index, y=category_counts.values, ax=ax1, palette=f"{current_theme}_r")
+                        plt.xticks(rotation=45, ha='right')
+                        for i, v in enumerate(category_counts.values):
+                            ax1.text(i, v + max(category_counts.values) * 0.02, str(v), ha='center', fontsize=12)
                         plt.tight_layout()
-                        st.pyplot(fig3, use_container_width=True)
-                        st.markdown(get_image_download_link(fig3, f'고장유형_{colname}_히트맵.png', f'{colname} 기준 히트맵 다운로드'), unsafe_allow_html=True)
-                    except Exception as e:
-                        st.error(f"히트맵 생성 중 오류가 발생했습니다: {e}")
-                        st.info("선택한 필터에 맞는 데이터가 충분하지 않을 수 있습니다.")
+                        st.pyplot(fig1, use_container_width=True)
+                        st.markdown(get_image_download_link(fig1, f'고장유형_{colname}_분포.png', f'{colname} 분포 다운로드'), unsafe_allow_html=True)
+
+                    with col2:
+                        st.markdown(f"**{colname}별 고장 유형 비율 (Pie)**")
+                        fig2, ax2 = create_figure_with_korean(figsize=(8, 8), dpi=300)
+                        category_counts.plot(kind='pie', autopct='%1.1f%%', ax=ax2,
+                                             colors=sns.color_palette(current_theme, n_colors=len(category_counts)))
+                        ax2.set_ylabel('')
+                        plt.tight_layout()
+                        st.pyplot(fig2, use_container_width=True)
+                        st.markdown(get_image_download_link(fig2, f'고장유형_{colname}_비율.png', f'{colname} 비율 다운로드'), unsafe_allow_html=True)
+
+                    with col3:
+                        st.markdown(f"**고장유형 vs 브랜드_모델 히트맵**")
+                        try:
+                            pivot_df = df_filtered.pivot_table(
+                                index='고장유형',
+                                columns='브랜드_모델',
+                                aggfunc='size',
+                                fill_value=0
+                            )
+                            fig3, ax3 = create_figure_with_korean(figsize=(12, 10), dpi=300)
+                            sns.heatmap(pivot_df, cmap=current_theme, annot=True, fmt='d', linewidths=0.5, ax=ax3)
+                            plt.xticks(rotation=90)
+                            plt.yticks(rotation=0)
+                            plt.tight_layout()
+                            st.pyplot(fig3, use_container_width=True)
+                            st.markdown(get_image_download_link(fig3, f'고장유형_{colname}_히트맵.png', f'{colname} 히트맵 다운로드'), unsafe_allow_html=True)
+                        except Exception as e:
+                            st.error(f"히트맵 생성 중 오류가 발생했습니다: {e}")
+                            st.info("선택한 필터에 맞는 데이터가 충분하지 않을 수 있습니다.")
 
             # 자재내역 분석 섹션 추가 - 자재내역 컬럼이 있는 경우만 표시
             st.subheader("모델 타입 분석")

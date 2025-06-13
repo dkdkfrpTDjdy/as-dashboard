@@ -1327,8 +1327,23 @@ if df is not None:
                     mode_year = model_df['제조년도_정수'].mode().iloc[0]
                     model_df['제조년도_정수'] = model_df['제조년도_정수'].fillna(mode_year)
 
+                def year_to_range(year):
+                    if year <= 2005:
+                        return "2005이하"
+                    elif year <= 2010:
+                        return "2006-2010"
+                    elif year <= 2015:
+                        return "2011-2015"
+                    elif year <= 2020:
+                        return "2016-2020"
+                    else:
+                        return "2021-2025"
+
+                df['제조년도_구간'] = df['제조년도_정수'].apply(year_to_range)
+                df['제조년도_구간_인코딩'] = LabelEncoder().fit_transform(df['제조년도_구간'])
+
                 # 피처
-                features = ['브랜드_인코딩', '모델_인코딩', '작업유형_인코딩', '정비대상_인코딩', '정비작업_인코딩', 'AS처리일수', '제조년도_정수']
+                features = ['브랜드_인코딩', '모델_인코딩', '작업유형_인코딩', '정비대상_인코딩', '정비작업_인코딩', 'AS처리일수', '제조년도_구간_인코딩']
 
                 # 타겟
                 model_df['재정비간격_타겟'] = model_df['재정비간격'].fillna(365).clip(0, 365)
@@ -1382,32 +1397,79 @@ if df is not None:
 
         if not filtered_df.empty:
             # 관리번호 선택 or 직접입력
+            # 관리번호 선택 or 직접입력
             st.markdown("관리번호 (선택)")
             col_id_sel, col_id_input = st.columns(2)
 
             with col_id_sel:
                 existing_ids = filtered_df['관리번호'].dropna().unique()
-                selected_id = st.selectbox("기존 관리번호", [""] + list(existing_ids))
+                selected_id = st.selectbox("관리번호 선택", [""] + list(existing_ids))
 
             with col_id_input:
-                manual_id = st.text_input("직접 입력 (우선 적용됨)", value="")
+                manual_id = st.text_input("관리번호 입력", value="")
 
             final_id = manual_id if manual_id else selected_id
 
-            # 제조년도 선택
+            # 제조년도 선택 (구간 기반)
             if '제조년도' in filtered_df.columns:
                 st.markdown("제조년도 (선택)")
-                years = filtered_df['제조년도'].dropna().unique()
-                selected_year = st.selectbox("제조년도 선택", [""] + sorted(years.astype(str)))
+
+                # 소숫점 제거 및 정수화
+                years = filtered_df['제조년도'].dropna().astype(int)
+
+                # 구간 매핑 함수
+                def year_to_range(year):
+                    if year <= 2005:
+                        return "2005년 이하"
+                    elif year <= 2010:
+                        return "2006-2010"
+                    elif year <= 2015:
+                        return "2011-2015"
+                    elif year <= 2020:
+                        return "2016-2020"
+                    else:
+                        return "2021-2025"
+
+                # 구간 리스트 생성
+                year_ranges = sorted(set(year_to_range(y) for y in years))
+                selected_year_range = st.selectbox(year_ranges)
+
+                # 구간을 대표 정수형 연도로 변환
+                year_range_to_int = {
+                    "2005년 이하": 2005,
+                    "2006-2010": 2008,
+                    "2011-2015": 2013,
+                    "2016-2020": 2018,
+                    "2021-2025": 2023
+                }
+                year_int = year_range_to_int.get(selected_year_range, 2023)
             else:
-                selected_year = ""
+                selected_year_range = ""
+                year_int = df['제조년도'].dropna().astype(int).mode().iloc[0]
 
             # 선택된 정보 요약
-            st.info(f"선택된 관리번호: {final_id or '없음'}, 제조년도: {selected_year or '없음'}")
+            st.info(f"선택된 관리번호: {final_id or '없음'}, 제조년도: {selected_year_range or '없음'}")
 
             # 해당 모델의 현재 상태에 관한 정보 표시
             filtered_df = df[(df['브랜드'] == selected_brand) & (df['모델명'] == selected_model)]
 
+            if len(filtered_df) > 0:
+                latest_record = filtered_df.sort_values('정비일자', ascending=False).iloc[0]
+
+                # 최근 정비 내용 표시
+                st.subheader("장비 최근 정비 정보")
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.write(f"**최근 정비일:** {latest_record['정비일자'].strftime('%Y-%m-%d')}")
+                    st.write(f"**고장 유형:** {latest_record['작업유형']} > {latest_record['정비대상']} > {latest_record['정비작업']}")
+                    st.write(f"**종류:** {latest_record.get('자재내역', '정보 없음')}")
+
+                with col2:
+                    st.write(f"**이전 정비일:** {latest_record.get('최근정비일자', '정보 없음')}")
+                    st.write(f"**정비 내용:** {latest_record.get('정비내용', '정보 없음')}")
+                    st.write(f"**현장명:** {latest_record.get('현장명', '정보 없음')}")
+                    st.write(f"**정비사:** {latest_record.get('정비자', '정보 없음')}")
         
             if len(filtered_df) > 0:
                 latest_record = filtered_df.sort_values('정비일자', ascending=False).iloc[0]
@@ -1532,7 +1594,7 @@ else:
     1. **대시보드**: 핵심 성과 지표, 지역별 분포, 월별 AS 건수, 30일 내 재정비율
     2. **고장 유형 분석**: 고장 유형 분포 및 브랜드-모델별 고장 패턴 히트맵
     3. **브랜드/모델 분석**: 브랜드 및 모델별 특성 분석
-    4. **정비내용 텍스트 분석**: 정비내용 워드클라우드 및 분류별 정비내용 분석
+    4. **정비내용 분석**: 정비내용 워드클라우드 및 분류별 정비내용 분석
     5. **고장 예측**: 기계학습 모델을 활용한 재정비 기간 및 증상 예측
     6. 데이터 출처: **AS 데이터: 구 ERP > 자산관리 > 정비관리 > 건설장비AS**
                   **자산조회 파일: SAP > 자산조회**

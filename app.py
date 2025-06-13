@@ -738,7 +738,7 @@ if df is not None:
                         fuel_type_counts = df['연료'].value_counts().dropna()
                         
                         if len(fuel_type_counts) > 0:
-                            fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
+                            fig, ax = create_figure_with_korean(figsize=(10, 9), dpi=300)
                             sns.barplot(x=fuel_type_counts.index, y=fuel_type_counts.values, ax=ax, palette=f"{current_theme}_r")
                             
                             # 막대 위에 텍스트 표시
@@ -799,7 +799,7 @@ if df is not None:
                         driving_type_counts = df['운전방식'].value_counts().head(15)
                         
                         if len(driving_type_counts) > 0:
-                            fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
+                            fig, ax = create_figure_with_korean(figsize=(10, 9), dpi=300)
                             sns.barplot(x=driving_type_counts.index, y=driving_type_counts.values, ax=ax, palette=f"{current_theme}_r")
                             
                             # 막대 위에 텍스트 표시
@@ -861,7 +861,7 @@ if df is not None:
                         load_capacity_counts = df['적재용량'].value_counts().head(15)
                         
                         if len(load_capacity_counts) > 0:
-                            fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
+                            fig, ax = create_figure_with_korean(figsize=(10, 9), dpi=300)
                             sns.barplot(x=load_capacity_counts.index, y=load_capacity_counts.values, ax=ax, palette=f"{current_theme}_r")
                             
                             # 막대 위에 텍스트 표시
@@ -922,7 +922,7 @@ if df is not None:
                         mast_type_counts = df['마스트형'].value_counts().head(15)
                         
                         if len(mast_type_counts) > 0:
-                            fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
+                            fig, ax = create_figure_with_korean(figsize=(10, 9), dpi=300)
                             sns.barplot(x=mast_type_counts.index, y=mast_type_counts.values, ax=ax, palette=f"{current_theme}_r")
                             
                             # 막대 위에 텍스트 표시

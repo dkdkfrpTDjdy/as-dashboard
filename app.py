@@ -101,11 +101,11 @@ color_themes = {
 }
 
 # 사이드바 설정
-st.sidebar.title("산업장비 AS 데이터 분석")
+st.sidebar.title("데이터 업로드 및 메뉴 클릭")
 
 # 파일 업로더 - 두 개의 파일 업로드 기능 추가
-uploaded_file1 = st.sidebar.file_uploader("AS 데이터 파일 업로드", type=["xlsx"])
-uploaded_file2 = st.sidebar.file_uploader("자산조회 파일 업로드", type=["xlsx"])
+uploaded_file1 = st.sidebar.file_uploader("**AS 데이터 업로드**", type=["xlsx"])
+uploaded_file2 = st.sidebar.file_uploader("**자산조회 파일 업로드**", type=["xlsx"])
 
 # 데이터 로드 함수
 @st.cache_data
@@ -180,7 +180,7 @@ if uploaded_file1 is not None:
     else:
         df = df1
         file_name = file_name1
-        st.sidebar.warning("장비 정보 파일이 업로드되지 않았습니다. AS 데이터만 사용합니다.")
+        st.sidebar.warning("자산조회 파일이 업로드되지 않았습니다. AS 데이터만 사용합니다.")
 else:
     df = None
     file_name = None
@@ -1482,8 +1482,8 @@ if df is not None:
             """)
 
 else:
-    st.header("산업장비 AS 데이터 분석 대시보드")
-    st.info("데이터 파일을 업로드하거나 샘플 데이터를 사용해주세요.")
+    st.header("산업장비 AS 대시보드")
+    st.info("좌측에 데이터 파일을 업로드해 주세요.")
     
     # 대시보드 설명 표시
     st.markdown("""
@@ -1494,4 +1494,6 @@ else:
     3. **브랜드/모델 분석**: 브랜드 및 모델별 특성 분석
     4. **정비내용 텍스트 분석**: 정비내용 워드클라우드 및 분류별 정비내용 분석
     5. **고장 예측**: 기계학습 모델을 활용한 재정비 기간 및 증상 예측
+    **AS 데이터: 구 ERP > 자산관리 > 정비관리 > 건설장비AS**
+    **자산조회 파일: SAP > 자산조회**
     """)

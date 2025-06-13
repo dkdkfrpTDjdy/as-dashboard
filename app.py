@@ -859,7 +859,7 @@ if df is not None:
                         st.subheader("적재용량별 AS 건수")
                         load_capacity_counts = df['적재용량'].value_counts().dropna()
                         
-                        if len(load_capacity_counts) > 100:
+                        if len(load_capacity_counts) > 0:
                             fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
                             sns.barplot(x=load_capacity_counts.index, y=load_capacity_counts.values, ax=ax, palette=f"{current_theme}_r")
                             

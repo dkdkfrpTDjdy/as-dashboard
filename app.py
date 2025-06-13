@@ -1440,9 +1440,6 @@ if df is not None:
             else:
                 st.warning("관리번호를 입력해주세요.")
 
-            # 정보 요약
-            st.info(f"선택된 관리번호: {final_id or '없음'}, 제조년도: {selected_year_range or '없음'}")
-
             # 해당 모델의 현재 상태에 관한 정보 표시
             filtered_df = df[(df['브랜드'] == selected_brand) & (df['모델명'] == selected_model)]
         

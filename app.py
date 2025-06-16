@@ -695,7 +695,7 @@ if df is not None:
             st.subheader("모델 타입 분석")
             
             # 탭으로 분석 항목 구분
-            tabs = st.tabs(["연료", "운전방식", "적재용량", "마스트형태"])
+            tabs = st.tabs(["연료", "운전방식", "적재용량", "마스트"])
             
             # 연료별 분석
             with tabs[0]:
@@ -881,14 +881,14 @@ if df is not None:
                 else:
                     st.warning("적재용량 데이터가 없습니다.")
 
-            # 마스트형태별 분석
+            # 마스트별 분석
             with tabs[3]:
                 if '마스트형' in df.columns:
                     col1, col2 = st.columns(2)
                     
                     with col1:
-                        # 마스트형태별 AS 건수
-                        st.subheader("마스트형태별 AS 건수")
+                        # 마스트별 AS 건수
+                        st.subheader("마스트별 AS 건수")
                         mast_type_counts = df['마스트형'].value_counts().head(15)
                         
                         if len(mast_type_counts) > 0:
@@ -904,17 +904,17 @@ if df is not None:
                             st.pyplot(fig, use_container_width=True)
                             
                             # 다운로드 링크 추가
-                            st.markdown(get_image_download_link(fig, '마스트형태별_AS_건수.png', '마스트형태별 AS 건수 다운로드'), unsafe_allow_html=True)
+                            st.markdown(get_image_download_link(fig, '마스트별_AS_건수.png', '마스트별 AS 건수 다운로드'), unsafe_allow_html=True)
                         else:
-                            st.warning("마스트형태 데이터가 없습니다.")
+                            st.warning("마스트 데이터가 없습니다.")
                     
                     with col2:
-                        # 마스트형태별 고장유형 Top 10
-                        st.subheader("마스트형태별 고장유형")
+                        # 마스트별 고장유형 Top 10
+                        st.subheader("마스트별 고장유형")
                         
-                        # 마스트형태 선택
+                        # 마스트 선택
                         mast_types = ["전체"] + df['마스트형'].value_counts().index.tolist()
-                        selected_mast = st.selectbox("마스트형태", mast_types)
+                        selected_mast = st.selectbox("마스트", mast_types)
                         
                         if selected_mast != "전체":
                             filtered_df_mast = df[df['마스트형'] == selected_mast]
@@ -940,7 +940,7 @@ if df is not None:
                         else:
                             st.warning("고장유형 데이터가 없습니다.")
                 else:
-                    st.warning("마스트형태 데이터가 없습니다.")
+                    st.warning("마스트 데이터가 없습니다.")
                     
             # 상위 고장 유형 리스트
             st.subheader("상위 고장 유형")

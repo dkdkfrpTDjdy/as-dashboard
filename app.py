@@ -1029,33 +1029,38 @@ if df is not None:
 
         # 선택 UI
         selected_brand = st.selectbox("브랜드 선택", brand_list)
-        
+
+        # 모델별 AS 시각화
         col1, col2 = st.columns(2)
-        
+
         with col1:
+            # 브랜드별 필터링
             if selected_brand != "전체":
                 brand_df = df[df['브랜드'] == selected_brand]
             else:
                 brand_df = df
-                
-            # 모델별 AS 건수
+
+            # 모델별 AS 건수 계산 (빈도수 순 정렬 유지)
             model_counts = brand_df['모델명'].value_counts().head(15)
-            
+
             st.subheader(f"{selected_brand if selected_brand != '전체' else '전체'} 모델별 AS 건수")
-            # 그래프 크기 맞춤
+
+            # 그래프 생성
             fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
             sns.barplot(x=model_counts.values, y=model_counts.index, ax=ax, palette=f"{current_theme}_r")
-            
-            # 막대 옆에 텍스트 표시
+
+            # 값 텍스트로 표시
             for i, v in enumerate(model_counts.values):
                 ax.text(v + max(model_counts.values) * 0.0025, i, str(v),
-                       va='center', fontsize=12)
-            
+                        va='center', fontsize=12)
+
             plt.tight_layout()
             st.pyplot(fig, use_container_width=True)
-            
-            # 다운로드 링크 추가
-            st.markdown(get_image_download_link(fig, f'{selected_brand}_모델별_AS_건수.png', f'{selected_brand} 모델별 AS 건수 다운로드'), unsafe_allow_html=True)
+
+            # 이미지 다운로드 링크
+            st.markdown(get_image_download_link(fig, f'{selected_brand}_모델별_AS_건수.png',
+                                                f'{selected_brand} 모델별 AS 건수 다운로드'),
+                        unsafe_allow_html=True)
         
         with col2:
             # 브랜드별 고장 유형 분석

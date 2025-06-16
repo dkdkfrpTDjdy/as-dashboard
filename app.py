@@ -672,7 +672,7 @@ if df is not None:
                         st.markdown(get_image_download_link(fig2, f'고장유형_{colname}_비율.png', f'{colname} 비율 다운로드'), unsafe_allow_html=True)
 
                     with col3:
-                        st.markdown(f"**모델에 따른 고장유형 증상**")
+                        st.markdown(f"**{colname}에 따른 고장 증상**")
                         try:
                             pivot_df = df_filtered.pivot_table(
                                 index='고장유형',
@@ -883,13 +883,13 @@ if df is not None:
 
             # 마스트별 분석
             with tabs[3]:
-                if '마스트' in df.columns:
+                if '마스트형' in df.columns:
                     col1, col2 = st.columns(2)
                     
                     with col1:
                         # 마스트별 AS 건수
                         st.subheader("마스트별 AS 건수")
-                        mast_type_counts = df['마스트'].value_counts().head(15)
+                        mast_type_counts = df['마스트형'].value_counts().head(15)
                         
                         if len(mast_type_counts) > 0:
                             fig, ax = create_figure_with_korean(figsize=(10, 9), dpi=300)

@@ -643,7 +643,7 @@ if df is not None:
 
                     with col1:
                         st.markdown(f"**{colname} 분포**")
-                        fig1, ax1 = create_figure_with_korean(figsize=(8, 10), dpi=300)
+                        fig1, ax1 = create_figure_with_korean(figsize=(8, 9), dpi=300)
                         sns.barplot(x=category_counts.index, y=category_counts.values, ax=ax1, palette=f"{current_theme}_r")
                         plt.xticks(rotation=45, ha='right')
                         for i, v in enumerate(category_counts.values):
@@ -680,7 +680,7 @@ if df is not None:
                                 aggfunc='size',
                                 fill_value=0
                             )
-                            fig3, ax3 = create_figure_with_korean(figsize=(8, 10), dpi=300)
+                            fig3, ax3 = create_figure_with_korean(figsize=(8, 9), dpi=300)
                             sns.heatmap(pivot_df, cmap=current_theme, annot=True, fmt='d', linewidths=0.5, ax=ax3)
                             plt.xticks(rotation=90)
                             plt.yticks(rotation=0)

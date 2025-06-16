@@ -643,7 +643,7 @@ if df is not None:
 
                     with col1:
                         st.markdown(f"**{colname} 분포**")
-                        fig1, ax1 = create_figure_with_korean(figsize=(8, 7), dpi=300)
+                        fig1, ax1 = create_figure_with_korean(figsize=(10, 8), dpi=300)
                         sns.barplot(x=category_counts.index, y=category_counts.values, ax=ax1, palette=f"{current_theme}_r")
                         plt.xticks(rotation=45, ha='right')
                         for i, v in enumerate(category_counts.values):
@@ -680,7 +680,7 @@ if df is not None:
                                 aggfunc='size',
                                 fill_value=0
                             )
-                            fig3, ax3 = create_figure_with_korean(figsize=(12, 10), dpi=300)
+                            fig3, ax3 = create_figure_with_korean(figsize=(14, 10), dpi=300)
                             sns.heatmap(pivot_df, cmap=current_theme, annot=True, fmt='d', linewidths=0.5, ax=ax3)
                             plt.xticks(rotation=90)
                             plt.yticks(rotation=0)
@@ -883,13 +883,13 @@ if df is not None:
 
             # 마스트별 분석
             with tabs[3]:
-                if '마스트형' in df.columns:
+                if '마스트' in df.columns:
                     col1, col2 = st.columns(2)
                     
                     with col1:
                         # 마스트별 AS 건수
                         st.subheader("마스트별 AS 건수")
-                        mast_type_counts = df['마스트형'].value_counts().head(15)
+                        mast_type_counts = df['마스트'].value_counts().head(15)
                         
                         if len(mast_type_counts) > 0:
                             fig, ax = create_figure_with_korean(figsize=(10, 9), dpi=300)

@@ -326,22 +326,21 @@ if df is not None:
         with col3:
             if 'AS처리일수' in df.columns:
                 st.subheader("AS 처리 일수 분포")
-                
+
                 days_counts = df['AS처리일수'].value_counts().sort_index()
                 days_counts = days_counts[days_counts.index <= 10]  # 10일 이하만 표시
-                
+
                 fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
-                sns.barplot(x=days_counts.index, y=days_counts.values, ax=ax, palette=f"{current_theme}")
-                
+                sns.barplot(x=days_counts.index.astype(int), y=days_counts.values, ax=ax, palette=f"{current_theme}")
+
                 # 막대 위에 텍스트 표시
                 for i, v in enumerate(days_counts.values):
                     ax.text(i, v + max(days_counts.values) * 0.02, str(v),
-                           ha='center', fontsize=12)
-                
+                            ha='center', fontsize=12)
+
                 plt.tight_layout()
                 st.pyplot(fig, use_container_width=True)
-                
-                # 다운로드 링크 추가
+
                 st.markdown(get_image_download_link(fig, 'AS_처리일수_분포.png', 'AS 처리일수 분포 다운로드'), unsafe_allow_html=True)
                 
         st.markdown("---")

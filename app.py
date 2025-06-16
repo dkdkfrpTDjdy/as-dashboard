@@ -6,6 +6,7 @@ import matplotlib as mpl
 import urllib.request
 import platform
 
+
 # 페이지 설정이 가장 먼저 와야 함
 st.set_page_config(
     page_title="산업장비 AS 분석 대시보드",
@@ -1148,7 +1149,22 @@ if df is not None:
         # 텍스트 데이터 확인
         if '정비내용' in df.columns:
             # 정비내용 데이터 준비
-            text_data = ' '.join(df['정비내용'].dropna().astype(str))
+
+            from kiwipiepy import Kiwi
+            kiwi = Kiwi()
+
+            # 텍스트 전체 수합
+            text_data_raw = ' '.join(df['정비내용'].dropna().astype(str))
+
+            # 명사 추출
+            extracted = kiwi.extract(text_data_raw, top_k=None)
+            nouns = [word for word, pos, _, _ in extracted if pos.startswith("N")]
+            
+            # 불용어 제거
+            filtered_nouns = [word for word in nouns if word not in stopwords and len(word) > 1]
+
+            # 워드클라우드 입력용 문자열 생성
+            text_data = ' '.join(filtered_nouns)
             
             if not text_data:
                 st.warning("정비내용 데이터가 없습니다.")
@@ -1160,7 +1176,7 @@ if df is not None:
                     st.subheader("전체 정비내용 워드클라우드")
                     
                     # 불용어 목록 업데이트
-                    stopwords = ["및", "있음", "없음", "함", "을", "후", "함", "접수", "취소", "확인", "위해", "통해", "오류", "완료", "작업", "실시", "진행", "수리"]
+                    stopwords = ["및", "있음", "없음", "함", "을", "후", "함", "접수", "취소", "확인", "위해", "통해", "오류", "완료", "작업", "실시", "진행", "수리", '정상작동', '정상작동확인', '조치완료']
                     
                     try:
                         # 워드클라우드 생성 (font_path 사용하지 않음)

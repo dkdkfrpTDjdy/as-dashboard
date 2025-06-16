@@ -1159,6 +1159,8 @@ if df is not None:
             tokens = kiwi.tokenize(text_data_raw)
             nouns = [token.form for token in tokens if token.tag.startswith('N')]
 
+            stopwords = ["및", "있음", "없음", "함", "을", "후", "함", "접수", "취소", "확인", "위해", "통해", "오류", "완료", "작업", "실시", "진행", "수리", '정상작동', '정상작동확인', '조치완료']
+
             # 불용어 제거
             filtered_nouns = [word for word in nouns if word not in stopwords and len(word) > 1]
 
@@ -1173,9 +1175,6 @@ if df is not None:
                 
                 with col1:
                     st.subheader("전체 정비내용 워드클라우드")
-                    
-                    # 불용어 목록 업데이트
-                    stopwords = ["및", "있음", "없음", "함", "을", "후", "함", "접수", "취소", "확인", "위해", "통해", "오류", "완료", "작업", "실시", "진행", "수리", '정상작동', '정상작동확인', '조치완료']
                     
                     try:
                         # 워드클라우드 생성 (font_path 사용하지 않음)

@@ -1006,8 +1006,29 @@ if df is not None:
         # 브랜드별 모델 분석
         st.subheader("브랜드별 모델 분석")
         
-        # 브랜드 선택
-        selected_brand = st.selectbox("브랜드 선택", ["전체"] + sorted(df['브랜드'].unique().tolist()))
+        # 브랜드 목록 정의 - 특정 브랜드를 우선순위로 배치하고 나머지는 빈도수 순으로
+        priority_brands = ['도요타', '두산', '현대', '클라크']
+
+        # 전체 브랜드 빈도 계산
+        brand_counts = df['브랜드'].value_counts()
+
+        # 우선순위 브랜드 목록 생성
+        brand_list = [brand for brand in priority_brands if brand in brand_counts.index]
+
+        # 나머지 브랜드: 우선순위와 '기타'를 제외하고 빈도수 순으로 정렬
+        other_brands = [brand for brand in brand_counts.index
+                        if brand not in priority_brands and brand != '기타']
+        brand_list.extend(other_brands)
+
+        # '기타'가 있으면 마지막에 추가
+        if '기타' in brand_counts.index:
+            brand_list.append('기타')
+
+        # "전체"를 맨 앞에 추가
+        brand_list = ["전체"] + brand_list
+
+        # 선택 UI
+        selected_brand = st.selectbox("브랜드 선택", brand_list)
         
         col1, col2 = st.columns(2)
         
@@ -1059,7 +1080,6 @@ if df is not None:
 
         # 제조년도별 분석 추가
         if '제조년도' in df.columns:
-            st.subheader("제조년도별 분석")
             col1, col2 = st.columns(2)
             
             with col1:
@@ -1104,7 +1124,6 @@ if df is not None:
                                    ha='center', fontsize=12)
                         
                         plt.xticks(rotation=45)
-                        plt.title("제조년도별 평균 AS 처리일수")
                         plt.tight_layout()
                         st.pyplot(fig, use_container_width=True)
                         

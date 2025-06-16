@@ -957,92 +957,119 @@ if df is not None:
         st.title("브랜드 및 모델 분석")
         
         # 자산 데이터 확인 (병합된 경우)
-        has_asset_data = '제조사명' in df2.columns if df2 is not None else False
+        has_asset_data = df2 is not None and '제조사명' in df2.columns and '제조사모델명' in df2.columns
         
         if has_asset_data:
             # 자산 데이터에서 브랜드별 자산 수 계산
             asset_brand_counts = df2['제조사명'].value_counts()
-            # 자산 데이터에서 모델별 자산 수 계산
-            asset_model_counts = df2['자재내역'].str.split(' ', n=1, expand=True)[0].value_counts()
+            total_assets = len(df2)
+            
+            # 자산 데이터에서 모델별 자산 수 계산 - 제조사모델명 컬럼 직접 사용
+            asset_model_counts = df2['제조사모델명'].value_counts()
+            
             # 자산 데이터에서 제조년도별 자산 수 계산
             asset_year_counts = df2['제조년도'].value_counts()
+            
+            # 브랜드별 자산 비율 계산
+            asset_brand_ratio = asset_brand_counts / total_assets * 100
+            
+            # 모델별 자산 비율 계산
+            asset_model_ratio = asset_model_counts / total_assets * 100
+            
+            # 제조년도별 자산 비율 계산
+            asset_year_ratio = asset_year_counts / total_assets * 100
         else:
-            st.warning("자산조회 파일이 업로드되지 않았습니다. AS 건수만 표시합니다.")
+            st.warning("자산조회 파일이 업로드되지 않았거나 필요한 컬럼이 없습니다. AS 건수만 표시합니다.")
+        
+        # AS 데이터 전체 건수
+        total_as = len(df)
         
         # 그래프 행 1: 브랜드 분포와 모델별 분석 (높이 제한)
         col1, col2 = st.columns(2)
         
         with col1:
             # 브랜드 분포
-            st.subheader("브랜드 분포")
+            st.subheader("브랜드별 AS 분포")
             brand_counts = df['브랜드'].value_counts()
             
+            # 브랜드별 AS 비율 계산 (전체 AS 중 해당 브랜드가 차지하는 비율)
+            brand_as_ratio = brand_counts / total_as * 100
+            
             # 3% 이하는 '기타'로 통합
-            brand_counts = group_small_categories(brand_counts, threshold=0.03)
-            brand_counts = brand_counts.nlargest(15) # 상위 15개만 표시
+            brand_as_ratio = group_small_categories(brand_as_ratio, threshold=0.03)
+            brand_as_ratio = brand_as_ratio.nlargest(15) # 상위 15개만 표시
             
             if has_asset_data:
-                # 자산 대비 AS 비율 계산
+                # 자산 대비 AS 비율 계산 (비율 대 비율로 계산)
                 brand_ratio_df = pd.DataFrame({
-                    '브랜드': brand_counts.index,
-                    'AS건수': brand_counts.values,
-                    '자산수': [asset_brand_counts.get(brand, 0) for brand in brand_counts.index]
+                    '브랜드': brand_as_ratio.index,
+                    'AS비율(%)': brand_as_ratio.values,
+                    '자산비율(%)': [asset_brand_ratio.get(brand, 0) for brand in brand_as_ratio.index]
                 })
                 
-                # 자산수가 0인 경우 1로 설정하여 나누기 오류 방지
-                brand_ratio_df['자산수'] = brand_ratio_df['자산수'].replace(0, 1)
-                brand_ratio_df['AS비율'] = (brand_ratio_df['AS건수'] / brand_ratio_df['자산수']).round(2)
+                # 자산비율이 0인 경우 0.1로 설정하여 나누기 오류 방지
+                brand_ratio_df['자산비율(%)'] = brand_ratio_df['자산비율(%)'].replace(0, 0.1)
+                
+                # AS비율 / 자산비율 계산 (1보다 크면 자산 대비 AS가 많이 발생)
+                brand_ratio_df['AS/자산비율'] = (brand_ratio_df['AS비율(%)'] / brand_ratio_df['자산비율(%)']).round(2)
                 
                 # 높이를 제한하여 더 작게 표시
                 fig, ax = create_figure_with_korean(figsize=(8, 6), dpi=300)
-                sns.barplot(x=brand_ratio_df['브랜드'], y=brand_ratio_df['AS건수'], ax=ax, palette=f"{current_theme}_r")
+                sns.barplot(x=brand_ratio_df['브랜드'], y=brand_ratio_df['AS비율(%)'], ax=ax, palette=f"{current_theme}_r")
                 
-                # 막대 위에 텍스트 표시 (AS건수와 자산수 함께 표시)
+                # 막대 위에 텍스트 표시 (AS비율과 자산비율 함께 표시)
                 for i, row in enumerate(brand_ratio_df.itertuples()):
-                    ax.text(i, row.AS건수 + max(brand_ratio_df['AS건수']) * 0.01, 
-                        f"{int(row.AS건수)}\n({row.자산수}대)",
+                    ax.text(i, row._2 + max(brand_ratio_df['AS비율(%)']) * 0.01, 
+                        f"{row._2:.1f}%\n({row._3:.1f}%)",
                         ha='center', fontsize=10)
                 
                 plt.xticks(rotation=45, ha='right')
+                plt.ylabel('AS 비율 (%)')
                 plt.tight_layout()
                 st.pyplot(fig, use_container_width=True)
                 
                 # 다운로드 링크 추가
-                st.markdown(get_image_download_link(fig, '브랜드_분포.png', '브랜드 분포 다운로드'), unsafe_allow_html=True)
+                st.markdown(get_image_download_link(fig, '브랜드_AS_분포.png', '브랜드 AS 분포 다운로드'), unsafe_allow_html=True)
                 
                 # 자산 대비 AS 비율 그래프 추가
-                st.subheader("브랜드별 자산 대비 AS 비율")
+                st.subheader("브랜드별 자산비율 대비 AS비율")
                 fig, ax = create_figure_with_korean(figsize=(8, 6), dpi=300)
-                sns.barplot(x=brand_ratio_df['브랜드'], y=brand_ratio_df['AS비율'], ax=ax, palette=f"{current_theme}")
+                
+                # 1을 기준선으로 표시 (1 = 자산비율과 AS비율이 동일)
+                plt.axhline(y=1, color='r', linestyle='-', alpha=0.3)
+                
+                sns.barplot(x=brand_ratio_df['브랜드'], y=brand_ratio_df['AS/자산비율'], ax=ax, palette=f"{current_theme}")
                 
                 # 막대 위에 텍스트 표시
                 for i, row in enumerate(brand_ratio_df.itertuples()):
-                    ax.text(i, row.AS비율 + max(brand_ratio_df['AS비율']) * 0.01, 
-                        f"{row.AS비율:.2f}",
+                    ax.text(i, row._4 + 0.1, 
+                        f"{row._4:.2f}",
                         ha='center', fontsize=10)
                 
                 plt.xticks(rotation=45, ha='right')
+                plt.ylabel('AS비율/자산비율')
                 plt.tight_layout()
                 st.pyplot(fig, use_container_width=True)
                 
                 # 다운로드 링크 추가
-                st.markdown(get_image_download_link(fig, '브랜드_AS비율.png', '브랜드 AS비율 다운로드'), unsafe_allow_html=True)
+                st.markdown(get_image_download_link(fig, '브랜드_AS자산_비율.png', '브랜드 AS/자산 비율 다운로드'), unsafe_allow_html=True)
             else:
                 # 자산 데이터가 없는 경우 기존 방식으로 표시
                 fig, ax = create_figure_with_korean(figsize=(8, 6), dpi=300)
-                sns.barplot(x=brand_counts.index, y=brand_counts.values, ax=ax, palette=f"{current_theme}_r")
+                sns.barplot(x=brand_as_ratio.index, y=brand_as_ratio.values, ax=ax, palette=f"{current_theme}_r")
                 
                 # 막대 위에 텍스트 표시
-                for i, v in enumerate(brand_counts.values):
-                    ax.text(i, v + max(brand_counts.values) * 0.01, str(int(v)),
+                for i, v in enumerate(brand_as_ratio.values):
+                    ax.text(i, v + max(brand_as_ratio.values) * 0.01, f"{v:.1f}%",
                         ha='center', fontsize=12)
                 
                 plt.xticks(rotation=45, ha='right')
+                plt.ylabel('AS 비율 (%)')
                 plt.tight_layout()
                 st.pyplot(fig, use_container_width=True)
                 
                 # 다운로드 링크 추가
-                st.markdown(get_image_download_link(fig, '브랜드_분포.png', '브랜드 분포 다운로드'), unsafe_allow_html=True)
+                st.markdown(get_image_download_link(fig, '브랜드_AS_분포.png', '브랜드 AS 분포 다운로드'), unsafe_allow_html=True)
         
         with col2:
             # 브랜드별 AS 비율 파이 차트
@@ -1062,7 +1089,27 @@ if df is not None:
             st.pyplot(fig, use_container_width=True)
             
             # 다운로드 링크 추가
-            st.markdown(get_image_download_link(fig, '브랜드_AS_비율.png', '브랜드 AS 비율 다운로드'), unsafe_allow_html=True)
+            st.markdown(get_image_download_link(fig, '브랜드_AS_비율_파이.png', '브랜드 AS 비율 파이차트 다운로드'), unsafe_allow_html=True)
+            
+            # 자산 데이터가 있으면 자산 비율 파이 차트도 표시
+            if has_asset_data:
+                st.subheader("브랜드별 자산 비율")
+                
+                # 3% 이하는 '기타'로 통합
+                asset_brand_ratio_pie = asset_brand_ratio.copy()
+                asset_brand_ratio_pie = group_small_categories(asset_brand_ratio_pie, threshold=0.03)
+                
+                # 파이 차트 크기 조정
+                fig, ax = create_figure_with_korean(figsize=(6, 6), dpi=300)
+                asset_brand_ratio_pie.plot(kind='pie', autopct='%1.1f%%', ax=ax, 
+                                colors=sns.color_palette("Paired", n_colors=len(asset_brand_ratio_pie)))
+                ax.set_ylabel('')
+                plt.tight_layout()
+                
+                st.pyplot(fig, use_container_width=True)
+                
+                # 다운로드 링크 추가
+                st.markdown(get_image_download_link(fig, '브랜드_자산_비율_파이.png', '브랜드 자산 비율 파이차트 다운로드'), unsafe_allow_html=True)
         
         # 브랜드별 모델 분석
         st.subheader("브랜드별 모델 분석")
@@ -1098,87 +1145,102 @@ if df is not None:
             # 브랜드별 필터링
             if selected_brand != "전체":
                 brand_df = df[df['브랜드'] == selected_brand]
+                brand_total_as = len(brand_df)
             else:
                 brand_df = df
+                brand_total_as = total_as
 
             # 모델별 AS 건수 계산 (빈도수 순 정렬 유지)
             model_counts = brand_df['모델명'].value_counts().head(15)
+            
+            # 모델별 AS 비율 계산 (해당 브랜드 내에서의 비율)
+            model_as_ratio = (model_counts / brand_total_as * 100).round(1)
 
-            st.subheader(f"{selected_brand if selected_brand != '전체' else '전체'} 모델별 AS 건수")
+            st.subheader(f"{selected_brand if selected_brand != '전체' else '전체'} 모델별 AS 비율")
 
             if has_asset_data:
                 # 자산 데이터에서 해당 브랜드의 모델별 자산 수 계산
                 if selected_brand != "전체":
                     asset_brand_df = df2[df2['제조사명'] == selected_brand]
+                    brand_total_assets = len(asset_brand_df)
                 else:
                     asset_brand_df = df2
+                    brand_total_assets = total_assets
                 
-                # 자산 데이터에서 모델명 추출 (첫 번째 단어)
-                asset_model_counts_filtered = asset_brand_df['자재내역'].str.split(' ', n=1, expand=True)[0].value_counts()
+                # 모델별 자산 비율 계산 (해당 브랜드 내에서의 비율)
+                asset_model_counts_filtered = asset_brand_df['제조사모델명'].value_counts()
+                asset_model_ratio = (asset_model_counts_filtered / brand_total_assets * 100).round(1)
                 
                 # 모델별 자산 대비 AS 비율 계산
                 model_ratio_df = pd.DataFrame({
-                    '모델명': model_counts.index,
-                    'AS건수': model_counts.values,
-                    '자산수': [asset_model_counts_filtered.get(model, 0) for model in model_counts.index]
+                    '모델명': model_as_ratio.index,
+                    'AS비율(%)': model_as_ratio.values,
+                    '자산비율(%)': [asset_model_ratio.get(model, 0) for model in model_as_ratio.index]
                 })
                 
-                # 자산수가 0인 경우 1로 설정하여 나누기 오류 방지
-                model_ratio_df['자산수'] = model_ratio_df['자산수'].replace(0, 1)
-                model_ratio_df['AS비율'] = (model_ratio_df['AS건수'] / model_ratio_df['자산수']).round(2)
+                # 자산비율이 0인 경우 0.1로 설정하여 나누기 오류 방지
+                model_ratio_df['자산비율(%)'] = model_ratio_df['자산비율(%)'].replace(0, 0.1)
+                model_ratio_df['AS/자산비율'] = (model_ratio_df['AS비율(%)'] / model_ratio_df['자산비율(%)']).round(2)
                 
                 # 그래프 생성
                 fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                sns.barplot(x=model_ratio_df['AS건수'], y=model_ratio_df['모델명'], ax=ax, palette=f"{current_theme}_r")
+                sns.barplot(x=model_ratio_df['AS비율(%)'], y=model_ratio_df['모델명'], ax=ax, palette=f"{current_theme}_r")
 
-                # 값 텍스트로 표시 (AS건수와 자산수 함께 표시)
+                # 값 텍스트로 표시 (AS비율과 자산비율 함께 표시)
                 for i, row in enumerate(model_ratio_df.itertuples()):
-                    ax.text(row.AS건수 + max(model_ratio_df['AS건수']) * 0.0025, i, 
-                        f"{int(row.AS건수)} ({row.자산수}대)",
+                    ax.text(row._2 + max(model_ratio_df['AS비율(%)']) * 0.01, i, 
+                        f"{row._2:.1f}% ({row._3:.1f}%)",
                         va='center', fontsize=10)
 
+                plt.xlabel('AS 비율 (%)')
                 plt.tight_layout()
                 st.pyplot(fig, use_container_width=True)
 
-                # 이미지 다운로드 링크
-                st.markdown(get_image_download_link(fig, f'{selected_brand}_모델별_AS_건수.png',
-                                                f'{selected_brand} 모델별 AS 건수 다운로드'),
-                        unsafe_allow_html=True)
-                
-                # 모델별 자산 대비 AS 비율 그래프 추가
-                st.subheader(f"{selected_brand if selected_brand != '전체' else '전체'} 모델별 자산 대비 AS 비율")
-                fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                sns.barplot(x=model_ratio_df['AS비율'], y=model_ratio_df['모델명'], ax=ax, palette=f"{current_theme}")
-                
-                # 값 텍스트로 표시
-                for i, row in enumerate(model_ratio_df.itertuples()):
-                    ax.text(row.AS비율 + max(model_ratio_df['AS비율']) * 0.0025, i, 
-                        f"{row.AS비율:.2f}",
-                        va='center', fontsize=10)
-                
-                plt.tight_layout()
-                st.pyplot(fig, use_container_width=True)
-                
                 # 이미지 다운로드 링크
                 st.markdown(get_image_download_link(fig, f'{selected_brand}_모델별_AS_비율.png',
                                                 f'{selected_brand} 모델별 AS 비율 다운로드'),
                         unsafe_allow_html=True)
+                
+                # 모델별 자산 대비 AS 비율 그래프 추가
+                st.subheader(f"{selected_brand if selected_brand != '전체' else '전체'} 모델별 자산비율 대비 AS비율")
+                fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+                
+                # 1을 기준선으로 표시 (1 = 자산비율과 AS비율이 동일)
+                plt.axvline(x=1, color='r', linestyle='-', alpha=0.3)
+                
+                sns.barplot(x=model_ratio_df['AS/자산비율'], y=model_ratio_df['모델명'], ax=ax, palette=f"{current_theme}")
+                
+                # 값 텍스트로 표시
+                for i, row in enumerate(model_ratio_df.itertuples()):
+                    ax.text(row._4 + 0.1, i, 
+                        f"{row._4:.2f}",
+                        va='center', fontsize=10)
+                
+                plt.xlabel('AS비율/자산비율')
+                plt.tight_layout()
+                st.pyplot(fig, use_container_width=True)
+                
+                # 이미지 다운로드 링크
+                st.markdown(get_image_download_link(fig, f'{selected_brand}_모델별_AS자산_비율.png',
+                                                f'{selected_brand} 모델별 AS/자산 비율 다운로드'),
+                        unsafe_allow_html=True)
             else:
                 # 자산 데이터가 없는 경우 기존 방식으로 표시
                 fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                sns.barplot(x=model_counts.values, y=model_counts.index, ax=ax, palette=f"{current_theme}_r")
+                sns.barplot(x=model_as_ratio.values, y=model_as_ratio.index, ax=ax, palette=f"{current_theme}_r")
 
                 # 값 텍스트로 표시
-                for i, v in enumerate(model_counts.values):
-                    ax.text(v + max(model_counts.values) * 0.0025, i, str(v),
+                for i, v in enumerate(model_as_ratio.values):
+                    ax.text(v + max(model_as_ratio.values) * 0.01, i, f"{v:.1f}%",
                             va='center', fontsize=12)
 
+                plt.xlabel('AS 비율 (%)')
                 plt.tight_layout()
                 st.pyplot(fig, use_container_width=True)
 
                 # 이미지 다운로드 링크
-                st.markdown(get_image_download_link(fig, f'{selected_brand}_모델별_AS_건수.png',
-                                                f'{selected_brand} 모델별 AS 건수 다운로드'),
+                st.markdown(get_image_download_link(fig, f'{selected_brand}_모델별_AS_비율.png',
+                                                f'{selected_brand} 모델별 AS 비율 다운로드'),
                         unsafe_allow_html=True)
         
         with col2:
@@ -1186,16 +1248,18 @@ if df is not None:
             if '고장유형' in brand_df.columns:
                 st.subheader(f"{selected_brand if selected_brand != '전체' else '전체'} 브랜드 고장 유형 분석")
                 brand_faults = brand_df['고장유형'].value_counts().head(15)
+                brand_faults_ratio = (brand_faults / brand_total_as * 100).round(1)
                 
                 # 그래프 크기 맞춤
                 fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                sns.barplot(x=brand_faults.values, y=brand_faults.index, ax=ax, palette=f"{current_theme}_r")
+                sns.barplot(x=brand_faults_ratio.values, y=brand_faults_ratio.index, ax=ax, palette=f"{current_theme}_r")
                 
                 # 막대 옆에 텍스트 표시
-                for i, v in enumerate(brand_faults.values):
-                    ax.text(v + max(brand_faults.values) * 0.0025, i, str(v),
+                for i, v in enumerate(brand_faults_ratio.values):
+                    ax.text(v + max(brand_faults_ratio.values) * 0.01, i, f"{v:.1f}%",
                         va='center', fontsize=12)
                 
+                plt.xlabel('고장유형 비율 (%)')
                 plt.tight_layout()
                 st.pyplot(fig, use_container_width=True)
                 
@@ -1207,80 +1271,94 @@ if df is not None:
             # 브랜드별 필터링
             if selected_brand != "전체":
                 brand_df = df[df['브랜드'] == selected_brand]
+                brand_total_as = len(brand_df)
             else:
                 brand_df = df
+                brand_total_as = total_as
 
             col1, col2 = st.columns(2)
 
             with col1:
-                st.subheader(f"{selected_brand if selected_brand != '전체' else '전체'} 연식")
+                st.subheader(f"{selected_brand if selected_brand != '전체' else '전체'} 연식별 AS 비율")
                 # 제조년도별 AS 건수
                 year_counts = brand_df['제조년도'].dropna().astype(int).value_counts().sort_index()
+                year_as_ratio = (year_counts / brand_total_as * 100).round(1)
 
                 if len(year_counts) > 0:
                     if has_asset_data:
                         # 자산 데이터에서 해당 브랜드의 제조년도별 자산 수 계산
                         if selected_brand != "전체":
                             asset_brand_df = df2[df2['제조사명'] == selected_brand]
+                            brand_total_assets = len(asset_brand_df)
                         else:
                             asset_brand_df = df2
+                            brand_total_assets = total_assets
                         
+                        # 제조년도별 자산 비율 계산
                         asset_year_counts_filtered = asset_brand_df['제조년도'].value_counts()
+                        asset_year_ratio = (asset_year_counts_filtered / brand_total_assets * 100).round(1)
                         
                         # 제조년도별 자산 대비 AS 비율 계산
                         year_ratio_df = pd.DataFrame({
-                            '제조년도': year_counts.index,
-                            'AS건수': year_counts.values,
-                            '자산수': [asset_year_counts_filtered.get(year, 0) for year in year_counts.index]
+                            '제조년도': year_as_ratio.index,
+                            'AS비율(%)': year_as_ratio.values,
+                            '자산비율(%)': [asset_year_ratio.get(year, 0) for year in year_as_ratio.index]
                         })
                         
-                        # 자산수가 0인 경우 1로 설정하여 나누기 오류 방지
-                        year_ratio_df['자산수'] = year_ratio_df['자산수'].replace(0, 1)
-                        year_ratio_df['AS비율'] = (year_ratio_df['AS건수'] / year_ratio_df['자산수']).round(2)
+                        # 자산비율이 0인 경우 0.1로 설정하여 나누기 오류 방지
+                        year_ratio_df['자산비율(%)'] = year_ratio_df['자산비율(%)'].replace(0, 0.1)
+                        year_ratio_df['AS/자산비율'] = (year_ratio_df['AS비율(%)'] / year_ratio_df['자산비율(%)']).round(2)
                         
                         fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
-                        sns.barplot(x=year_ratio_df['제조년도'].astype(str), y=year_ratio_df['AS건수'], ax=ax, palette=f"{current_theme}_r")
+                        sns.barplot(x=year_ratio_df['제조년도'].astype(str), y=year_ratio_df['AS비율(%)'], ax=ax, palette=f"{current_theme}_r")
 
                         for i, row in enumerate(year_ratio_df.itertuples()):
-                            ax.text(i, row.AS건수 + max(year_ratio_df['AS건수']) * 0.02, 
-                                f"{int(row.AS건수)} ({row.자산수}대)",
+                            ax.text(i, row._2 + max(year_ratio_df['AS비율(%)']) * 0.01, 
+                                f"{row._2:.1f}% ({row._3:.1f}%)",
                                 ha='center', fontsize=10)
 
                         plt.xticks(rotation=45)
+                        plt.ylabel('AS 비율 (%)')
                         plt.tight_layout()
                         st.pyplot(fig, use_container_width=True)
 
-                        st.markdown(get_image_download_link(fig, '연식별_AS_건수.png', '연식별 AS 건수 다운로드'), unsafe_allow_html=True)
+                        st.markdown(get_image_download_link(fig, '연식별_AS_비율.png', '연식별 AS 비율 다운로드'), unsafe_allow_html=True)
                         
                         # 제조년도별 자산 대비 AS 비율 그래프 추가
-                        st.subheader(f"{selected_brand if selected_brand != '전체' else '전체'} 연식별 자산 대비 AS 비율")
+                        st.subheader(f"{selected_brand if selected_brand != '전체' else '전체'} 연식별 자산비율 대비 AS비율")
                         fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
-                        sns.barplot(x=year_ratio_df['제조년도'].astype(str), y=year_ratio_df['AS비율'], ax=ax, palette=f"{current_theme}")
+                        
+                        # 1을 기준선으로 표시 (1 = 자산비율과 AS비율이 동일)
+                        plt.axhline(y=1, color='r', linestyle='-', alpha=0.3)
+                        
+                        sns.barplot(x=year_ratio_df['제조년도'].astype(str), y=year_ratio_df['AS/자산비율'], ax=ax, palette=f"{current_theme}")
                         
                         for i, row in enumerate(year_ratio_df.itertuples()):
-                            ax.text(i, row.AS비율 + max(year_ratio_df['AS비율']) * 0.02, 
-                                f"{row.AS비율:.2f}",
+                            ax.text(i, row._4 + 0.1, 
+                                f"{row._4:.2f}",
                                 ha='center', fontsize=10)
                         
                         plt.xticks(rotation=45)
+                        plt.ylabel('AS비율/자산비율')
                         plt.tight_layout()
                         st.pyplot(fig, use_container_width=True)
                         
-                        st.markdown(get_image_download_link(fig, '제조년도별_AS_비율.png', '제조년도별 AS 비율 다운로드'), unsafe_allow_html=True)
+                        st.markdown(get_image_download_link(fig, '제조년도별_AS자산_비율.png', '제조년도별 AS/자산 비율 다운로드'), unsafe_allow_html=True)
                     else:
                         # 자산 데이터가 없는 경우 기존 방식으로 표시
                         fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
-                        sns.barplot(x=year_counts.index.astype(str), y=year_counts.values, ax=ax, palette=f"{current_theme}_r")
+                        sns.barplot(x=year_as_ratio.index.astype(str), y=year_as_ratio.values, ax=ax, palette=f"{current_theme}_r")
 
-                        for i, v in enumerate(year_counts.values):
-                            ax.text(i, v + max(year_counts.values) * 0.02, str(v),
+                        for i, v in enumerate(year_as_ratio.values):
+                            ax.text(i, v + max(year_as_ratio.values) * 0.01, f"{v:.1f}%",
                                     ha='center', fontsize=12)
 
                         plt.xticks(rotation=45)
+                        plt.ylabel('AS 비율 (%)')
                         plt.tight_layout()
                         st.pyplot(fig, use_container_width=True)
 
-                        st.markdown(get_image_download_link(fig, '연식별_AS_건수.png', '연식별 AS 건수 다운로드'), unsafe_allow_html=True)
+                        st.markdown(get_image_download_link(fig, '연식별_AS_비율.png', '연식별 AS 비율 다운로드'), unsafe_allow_html=True)
                 else:
                     st.warning("제조년도 데이터가 없습니다.")
 
@@ -1298,10 +1376,11 @@ if df is not None:
                         sns.barplot(x=year_avg_days.index.astype(str), y=year_avg_days.values, ax=ax, palette=f"{current_theme}")
 
                         for i, v in enumerate(year_avg_days.values):
-                            ax.text(i, v + max(year_avg_days.values) * 0.02, f"{v:.1f}",
+                            ax.text(i, v + max(year_avg_days.values) * 0.02, f"{v:.1f}일",
                                     ha='center', fontsize=12)
 
                         plt.xticks(rotation=45)
+                        plt.ylabel('평균 처리일수')
                         plt.tight_layout()
                         st.pyplot(fig, use_container_width=True)
 

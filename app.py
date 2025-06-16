@@ -1153,17 +1153,16 @@ if df is not None:
             from kiwipiepy import Kiwi
             kiwi = Kiwi()
 
-            # 텍스트 전체 수합
             text_data_raw = ' '.join(df['정비내용'].dropna().astype(str))
 
-            # 명사 추출
-            extracted = kiwi.extract(text_data_raw, top_k=None)
-            nouns = [word for word, pos, _, _ in extracted if pos.startswith("N")]
-            
+            # 형태소 분석 + 명사 추출
+            tokens = kiwi.tokenize(text_data_raw)
+            nouns = [token.form for token in tokens if token.tag.startswith('N')]
+
             # 불용어 제거
             filtered_nouns = [word for word in nouns if word not in stopwords and len(word) > 1]
 
-            # 워드클라우드 입력용 문자열 생성
+            # 워드클라우드용 문자열 생성
             text_data = ' '.join(filtered_nouns)
             
             if not text_data:

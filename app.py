@@ -678,7 +678,8 @@ if df is not None:
                                 index='고장유형',
                                 columns='브랜드_모델',
                                 aggfunc='size',
-                                fill_value=0
+                                fill_value=0,
+                                cbar=False
                             )
                             fig3, ax3 = create_figure_with_korean(figsize=(8, 8), dpi=300)
                             sns.heatmap(pivot_df, cmap=current_theme, annot=True, fmt='d', linewidths=0.5, ax=ax3)

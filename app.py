@@ -1085,59 +1085,62 @@ if df is not None:
 
         # 제조년도별 분석 추가
         if '제조년도' in df.columns:
+            # 브랜드별 필터링
+            if selected_brand != "전체":
+                brand_df = df[df['브랜드'] == selected_brand]
+            else:
+                brand_df = df
+
             col1, col2 = st.columns(2)
-            
+
             with col1:
-                st.subheader("제조년도별 건수")
+                st.subheader(f"{selected_brand if selected_brand != '전체' else '전체'} 제조년도 건수")
                 # 제조년도별 AS 건수
-                year_counts = df['제조년도'].dropna().astype(int).value_counts().sort_index()
-                
+                year_counts = brand_df['제조년도'].dropna().astype(int).value_counts().sort_index()
+
                 if len(year_counts) > 0:
                     fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
                     sns.barplot(x=year_counts.index.astype(str), y=year_counts.values, ax=ax, palette=f"{current_theme}_r")
-                    
-                    # 막대 위에 텍스트 표시
+
                     for i, v in enumerate(year_counts.values):
                         ax.text(i, v + max(year_counts.values) * 0.02, str(v),
-                               ha='center', fontsize=12)
-                    
+                                ha='center', fontsize=12)
+
                     plt.xticks(rotation=45)
                     plt.tight_layout()
                     st.pyplot(fig, use_container_width=True)
-                    
-                    # 다운로드 링크 추가
+
                     st.markdown(get_image_download_link(fig, '제조년도별_AS_건수.png', '제조년도별 AS 건수 다운로드'), unsafe_allow_html=True)
                 else:
                     st.warning("제조년도 데이터가 없습니다.")
-            
+
             with col2:
-                st.subheader("제조년도별 처리일수")
-                # 제조년도별 평균 AS 처리일수
+                st.subheader(f"{selected_brand if selected_brand != '전체' else '전체'} 제조년도별 처리일수")
+
                 if 'AS처리일수' in df.columns:
-                    df_clean = df.dropna(subset=['제조년도', 'AS처리일수'])
+                    df_clean = brand_df.dropna(subset=['제조년도', 'AS처리일수'])
+
                     if len(df_clean) > 0:
-                        # 제조년도를 정수로 변환
                         df_clean['제조년도'] = df_clean['제조년도'].astype(int)
                         year_avg_days = df_clean.groupby('제조년도')['AS처리일수'].mean().sort_index()
-                        
+
                         fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
                         sns.barplot(x=year_avg_days.index.astype(str), y=year_avg_days.values, ax=ax, palette=f"{current_theme}")
-                        
-                        # 막대 위에 텍스트 표시
+
                         for i, v in enumerate(year_avg_days.values):
                             ax.text(i, v + max(year_avg_days.values) * 0.02, f"{v:.1f}",
-                                   ha='center', fontsize=12)
-                        
+                                    ha='center', fontsize=12)
+
                         plt.xticks(rotation=45)
                         plt.tight_layout()
                         st.pyplot(fig, use_container_width=True)
-                        
-                        # 다운로드 링크 추가
+
                         st.markdown(get_image_download_link(fig, '제조년도별_평균처리일수.png', '제조년도별 평균 처리일수 다운로드'), unsafe_allow_html=True)
                     else:
                         st.warning("제조년도 및 AS처리일수 데이터가 충분하지 않습니다.")
                 else:
                     st.warning("AS처리일수 데이터가 없습니다.")
+
 
     elif menu == "정비내용 분석":
         st.title("정비내용 분석")

@@ -1401,7 +1401,7 @@ if df is not None:
                                     ax.text(i - width/2, v + 0.1, f"{v:.1f}%", ha='center', fontsize=4)
                                 
                                 for i, v in enumerate(year_comparison['AS 비율(%)']):
-                                    ax.text(i + width/2, v + 0.2, f"{v:.1f}%", ha='center', fontsize=4)
+                                    ax.text(i + width/2, v + 0.3, f"{v:.1f}%", ha='center', fontsize=4)
                                 
                                 plt.tight_layout()
                                 st.pyplot(fig)

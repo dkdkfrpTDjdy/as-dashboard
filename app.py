@@ -1152,7 +1152,7 @@ if df is not None:
             
             # 간결한 값 표시
             for i, v in enumerate(model_as_ratio.values):
-                ax.text(v + 0.2, i, f"{v:.1f}%", va='center', fontsize=8)
+                ax.text(v + 0.1, i, f"{v:.1f}%", va='center', fontsize=8)
             
             ax.set_xlabel('AS 비율 (%)')
             plt.tight_layout()
@@ -1175,7 +1175,7 @@ if df is not None:
                 
                 # 간결한 값 표시
                 for i, v in enumerate(fault_ratio.values):
-                    ax.text(v + 0.2, i, f"{v:.1f}%", va='center', fontsize=8)
+                    ax.text(v + 0.1, i, f"{v:.1f}%", va='center', fontsize=8)
                 
                 ax.set_xlabel('고장유형 비율 (%)')
                 plt.tight_layout()
@@ -1242,10 +1242,10 @@ if df is not None:
                     
                     # 값 표시 (간결하게)
                     for i, v in enumerate(top_models['자산 비율(%)']):
-                        ax.text(v + 0.2, i - width/2, f"{v:.1f}%", va='center', fontsize=9)
+                        ax.text(v + 0.02, i - width/2, f"{v:.1f}%", va='center', fontsize=9)
                     
                     for i, v in enumerate(top_models['AS 비율(%)']):
-                        ax.text(v + 0.2, i + width/2, f"{v:.1f}%", va='center', fontsize=9)
+                        ax.text(v + 0.02, i + width/2, f"{v:.1f}%", va='center', fontsize=9)
                     
                     plt.tight_layout()
                     st.pyplot(fig)
@@ -1334,7 +1334,7 @@ if df is not None:
                             
                             # 간결한 값 표시
                             for i, v in enumerate(year_avg_days.values):
-                                ax.text(i, v + 0.1, f"{v:.1f}일", ha='center', fontsize=4)
+                                ax.text(i, v + 0.02, f"{v:.1f}일", ha='center', fontsize=4)
                             
                             plt.xticks(rotation=45)
                             ax.set_ylabel('평균 처리일수')
@@ -1398,10 +1398,10 @@ if df is not None:
                                 
                                 # 간결한 값 표시
                                 for i, v in enumerate(year_comparison['자산 비율(%)']):
-                                    ax.text(i - width/2, v + 0.2, f"{v:.1f}%", ha='center', fontsize=5)
+                                    ax.text(i - width/2, v + 0.2, f"{v:.1f}%", ha='center', fontsize=4)
                                 
                                 for i, v in enumerate(year_comparison['AS 비율(%)']):
-                                    ax.text(i + width/2, v + 0.2, f"{v:.1f}%", ha='center', fontsize=5)
+                                    ax.text(i + width/2, v + 0.2, f"{v:.1f}%", ha='center', fontsize=4)
                                 
                                 plt.tight_layout()
                                 st.pyplot(fig)

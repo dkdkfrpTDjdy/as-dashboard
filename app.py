@@ -998,7 +998,7 @@ if df is not None:
                 labels=brand_as_ratio.index, 
                 autopct='%1.1f%%',
                 textprops={'fontsize': 8},
-                colors=sns.color_palette(current_theme, n_colors=len(brand_as_ratio))
+                colors=sns.color_palette(f"{current_theme}_r", n_colors=len(sorted_brand_ratio))
             )
             
             # 레이블 가독성 향상
@@ -1033,6 +1033,7 @@ if df is not None:
                     '자산 비율(%)': [asset_brand_ratio.get(brand, 0) for brand in filtered_brands]
                 })
                 
+                
                 # AS/자산 비율 계산 (0으로 나누기 방지)
                 brand_comparison['자산 비율(%)'] = brand_comparison['자산 비율(%)'].replace(0, 0.1)
                 brand_comparison['AS/자산 비율'] = (brand_comparison['AS 비율(%)'] / brand_comparison['자산 비율(%)']).round(2)
@@ -1054,7 +1055,7 @@ if df is not None:
                     
                     # 축 설정
                     ax.set_xticks(x)
-                    ax.set_xticklabels(brand_comparison['브랜드'], fontsize=8, rotation=45)
+                    ax.set_xticklabels(brand_comparison['브랜드'], fontsize=8)
                     ax.legend(fontsize=8)
                     
                     # 값 표시
@@ -1087,9 +1088,9 @@ if df is not None:
                     
                     # 값 표시
                     for i, v in enumerate(brand_comparison['AS/자산 비율']):
-                        ax.text(i, v + 0.05, f"{v:.2f}", ha='center', va='bottom', fontsize=8)
+                        ax.text(i, v + 0.02, f"{v:.2f}", ha='center', va='bottom', fontsize=8)
                     
-                    plt.xticks(rotation=45, fontsize=8)
+                    plt.xticks(fontsize=8)
                     ax.set_ylabel('AS/자산 비율', fontsize=8)
                     plt.tight_layout()
                     st.pyplot(fig)
@@ -1136,7 +1137,7 @@ if df is not None:
             brand_title = "전체 "
         
         # 모델별 AS 건수 및 비율
-        model_counts = brand_df['모델명'].value_counts().head(10)  # 상위 10개만 (가독성)
+        model_counts = brand_df['모델명'].value_counts().head(15)  # 상위 10개만 (가독성)
         model_as_ratio = (model_counts / brand_total_as * 100).round(1)
         
         # 모델별 분석 그래프 (2개 그래프 나란히 배치)
@@ -1144,14 +1145,14 @@ if df is not None:
         
         with col1:
             # 모델별 AS 비율 그래프
-            st.subheader(f"{brand_title}모델별 AS 비율 (상위 10개)")
+            st.subheader(f"{brand_title}모델별 AS 비율")
             
-            fig, ax = create_figure_with_korean(figsize=(7, 7), dpi=200)
+            fig, ax = create_figure_with_korean(figsize=(7, 6), dpi=200)
             bars = sns.barplot(x=model_as_ratio.values, y=model_as_ratio.index, ax=ax, palette=f"{current_theme}_r")
             
             # 간결한 값 표시
             for i, v in enumerate(model_as_ratio.values):
-                ax.text(v + 0.5, i, f"{v:.1f}%", va='center', fontsize=10)
+                ax.text(v + 0.2, i, f"{v:.1f}%", va='center', fontsize=8)
             
             ax.set_xlabel('AS 비율 (%)')
             plt.tight_layout()
@@ -1166,15 +1167,15 @@ if df is not None:
             if '고장유형' in brand_df.columns:
                 st.subheader(f"{brand_title}고장 유형 분석 (상위 10개)")
                 
-                fault_counts = brand_df['고장유형'].value_counts().head(10)
+                fault_counts = brand_df['고장유형'].value_counts().head(15)
                 fault_ratio = (fault_counts / brand_total_as * 100).round(1)
                 
-                fig, ax = create_figure_with_korean(figsize=(7, 7), dpi=200)
+                fig, ax = create_figure_with_korean(figsize=(7, 6), dpi=200)
                 bars = sns.barplot(x=fault_ratio.values, y=fault_ratio.index, ax=ax, palette=f"{current_theme}_r")
                 
                 # 간결한 값 표시
                 for i, v in enumerate(fault_ratio.values):
-                    ax.text(v + 0.5, i, f"{v:.1f}%", va='center', fontsize=10)
+                    ax.text(v + 0.2, i, f"{v:.1f}%", va='center', fontsize=8)
                 
                 ax.set_xlabel('고장유형 비율 (%)')
                 plt.tight_layout()
@@ -1219,8 +1220,8 @@ if df is not None:
                     # 모델별 AS 및 자산 비율 비교 (수평 막대)
                     fig, ax = create_figure_with_korean(figsize=(8, 7), dpi=200)
                     
-                    # 데이터 준비 (가독성을 위해 상위 7개만)
-                    top_models = model_comparison.head(7)
+                    # 데이터 준비 
+                    top_models = model_comparison.head(8)
                     
                     # 수평 막대 그래프 (두 값 나란히)
                     y_pos = np.arange(len(top_models))
@@ -1241,10 +1242,10 @@ if df is not None:
                     
                     # 값 표시 (간결하게)
                     for i, v in enumerate(top_models['자산 비율(%)']):
-                        ax.text(v + 0.5, i - width/2, f"{v:.1f}%", va='center', fontsize=9)
+                        ax.text(v + 0.2, i - width/2, f"{v:.1f}%", va='center', fontsize=9)
                     
                     for i, v in enumerate(top_models['AS 비율(%)']):
-                        ax.text(v + 0.5, i + width/2, f"{v:.1f}%", va='center', fontsize=9)
+                        ax.text(v + 0.2, i + width/2, f"{v:.1f}%", va='center', fontsize=9)
                     
                     plt.tight_layout()
                     st.pyplot(fig)
@@ -1268,7 +1269,7 @@ if df is not None:
                     
                     # 값 표시 (간결하게)
                     for i, v in enumerate(top_models['AS/자산 비율']):
-                        ax.text(v + 0.05, i, f"{v:.1f}", va='center', fontsize=9)
+                        ax.text(v + 0.02, i, f"{v:.1f}", va='center', fontsize=9)
                     
                     ax.set_xlabel('AS/자산 비율 (1.0 = 동일 비율)')
                     plt.tight_layout()
@@ -1304,7 +1305,7 @@ if df is not None:
                     
                     # 간결한 값 표시
                     for i, v in enumerate(year_ratio.values):
-                        ax.text(i, v + 0.5, f"{v:.1f}%", ha='center', fontsize=9)
+                        ax.text(i, v + 0.2, f"{v:.1f}%", ha='center', fontsize=5)
                     
                     plt.xticks(rotation=45)
                     ax.set_ylabel('AS 비율 (%)')
@@ -1333,7 +1334,7 @@ if df is not None:
                             
                             # 간결한 값 표시
                             for i, v in enumerate(year_avg_days.values):
-                                ax.text(i, v + 0.5, f"{v:.1f}일", ha='center', fontsize=9)
+                                ax.text(i, v + 0.1, f"{v:.1f}일", ha='center', fontsize=4)
                             
                             plt.xticks(rotation=45)
                             ax.set_ylabel('평균 처리일수')
@@ -1397,10 +1398,10 @@ if df is not None:
                                 
                                 # 간결한 값 표시
                                 for i, v in enumerate(year_comparison['자산 비율(%)']):
-                                    ax.text(i - width/2, v + 0.5, f"{v:.1f}%", ha='center', fontsize=9)
+                                    ax.text(i - width/2, v + 0.2, f"{v:.1f}%", ha='center', fontsize=5)
                                 
                                 for i, v in enumerate(year_comparison['AS 비율(%)']):
-                                    ax.text(i + width/2, v + 0.5, f"{v:.1f}%", ha='center', fontsize=9)
+                                    ax.text(i + width/2, v + 0.2, f"{v:.1f}%", ha='center', fontsize=5)
                                 
                                 plt.tight_layout()
                                 st.pyplot(fig)
@@ -1425,7 +1426,7 @@ if df is not None:
                                 
                                 # 간결한 값 표시
                                 for i, v in enumerate(year_comparison['AS/자산 비율']):
-                                    ax.text(i, v + 0.05, f"{v:.1f}", ha='center', fontsize=9)
+                                    ax.text(i, v + 0.02, f"{v:.1f}", ha='center', fontsize=9)
                                 
                                 plt.xticks(rotation=45)
                                 ax.set_ylabel('AS/자산 비율 (1.0 = 동일 비율)')

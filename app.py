@@ -1026,7 +1026,7 @@ if df is not None:
                 
                 # 자산 비율 막대 (먼저 그려서 뒤에 위치)
                 asset_bars = ax.bar(x - width/2, brand_ratio_df['자산비율(%)'], width, label='자산비율(%)', 
-                                color=sns.color_palette("Paired")[1])
+                                color=sns.color_palette(current_theme)[1])
                 
                 # AS 비율 막대 (나중에 그려서 앞에 위치)
                 as_bars = ax.bar(x + width/2, brand_ratio_df['AS비율(%)'], width, label='AS비율(%)', 
@@ -1124,7 +1124,7 @@ if df is not None:
                 # 파이 차트 크기 조정
                 fig, ax = create_figure_with_korean(figsize=(6, 6), dpi=300)
                 asset_brand_ratio_pie.plot(kind='pie', autopct='%1.1f%%', ax=ax, 
-                                colors=sns.color_palette("Paired", n_colors=len(asset_brand_ratio_pie)))
+                                colors=sns.color_palette(current_theme, n_colors=len(asset_brand_ratio_pie)))
                 ax.set_ylabel('')
                 plt.tight_layout()
                 
@@ -1218,8 +1218,6 @@ if df is not None:
                             color=sns.color_palette(current_theme)[0])
             
             # 축 설정
-            ax.set_xlabel('비율 (%)')
-            ax.set_title('모델별 자산비율과 AS비율 비교')
             ax.set_yticks(x)
             ax.set_yticklabels(models)
             ax.legend()
@@ -1254,8 +1252,6 @@ if df is not None:
                     f"{row._4:.2f} ({row._2:.1f}% / {row._3:.1f}%)",
                     va='center', fontsize=10)
             
-            plt.xlabel('AS비율/자산비율 (AS비율% / 자산비율%)')
-            plt.title('1.0 = 자산비율과 AS비율이 동일, 1.0 초과 = AS 비율이 더 높음')
             plt.tight_layout()
             st.pyplot(fig, use_container_width=True)
             
@@ -1358,15 +1354,13 @@ if df is not None:
                     
                     # 자산 비율 막대 (먼저 그려서 뒤에 위치)
                     asset_bars = ax.bar(x - width/2, year_ratio_df['자산비율(%)'], width, label='자산비율(%)', 
-                                    color=sns.color_palette("Paired")[1])
+                                    color=sns.color_palette(current_theme)[1])
                     
                     # AS 비율 막대 (나중에 그려서 앞에 위치)
                     as_bars = ax.bar(x + width/2, year_ratio_df['AS비율(%)'], width, label='AS비율(%)', 
                                     color=sns.color_palette(current_theme)[0])
                     
                     # 축 설정
-                    ax.set_ylabel('비율 (%)')
-                    ax.set_title('연식별 자산비율과 AS비율 비교')
                     ax.set_xticks(x)
                     ax.set_xticklabels(years, rotation=45)
                     ax.legend()
@@ -1399,8 +1393,6 @@ if df is not None:
                             ha='center', fontsize=10)
                     
                     plt.xticks(rotation=45)
-                    plt.ylabel('AS비율/자산비율 (AS비율% / 자산비율%)')
-                    plt.title('1.0 = 자산비율과 AS비율이 동일, 1.0 초과 = AS 비율이 더 높음')
                     plt.tight_layout()
                     st.pyplot(fig, use_container_width=True)
                     

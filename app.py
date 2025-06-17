@@ -985,34 +985,37 @@ if df is not None:
         brand_as_ratio = group_small_categories(brand_as_ratio, threshold=0.03)
         brand_as_ratio = brand_as_ratio.nlargest(15)  # 상위 15개만 표시
         
-        # 브랜드 분석 그래프 - 파이차트만 표시
-        fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-        wedges, texts, autotexts = ax.pie(
-            brand_as_ratio.values, 
-            labels=brand_as_ratio.index, 
-            autopct='%1.1f%%',
-            textprops={'fontsize': 11},
-            colors=sns.color_palette(current_theme, n_colors=len(brand_as_ratio))
-        )
+        # 브랜드 분석 그래프 - 세 개의 그래프를 나란히 배치
+        col1, col2, col3 = st.columns(3)
         
-        # 레이블 가독성 향상
-        for text in texts:
-            text.set_fontsize(10)
-        for autotext in autotexts:
-            autotext.set_fontsize(10)
-            autotext.set_color('white')
-        
-        ax.set_title('브랜드별 AS 비율', fontsize=14)
-        plt.tight_layout()
-        st.pyplot(fig)
-        
-        # 다운로드 링크
-        st.markdown(get_image_download_link(fig, '브랜드_AS_비율_파이.png', '파이차트 다운로드'), unsafe_allow_html=True)
+        with col1:
+            # 브랜드별 AS 비율 파이 차트
+            st.subheader("브랜드별 AS 비율")
+            
+            fig, ax = create_figure_with_korean(figsize=(6, 6), dpi=200)
+            wedges, texts, autotexts = ax.pie(
+                brand_as_ratio.values, 
+                labels=brand_as_ratio.index, 
+                autopct='%1.1f%%',
+                textprops={'fontsize': 8},
+                colors=sns.color_palette(current_theme, n_colors=len(brand_as_ratio))
+            )
+            
+            # 레이블 가독성 향상
+            for text in texts:
+                text.set_fontsize(8)
+            for autotext in autotexts:
+                autotext.set_fontsize(8)
+                autotext.set_color('white')
+            
+            plt.tight_layout()
+            st.pyplot(fig)
+            
+            # 다운로드 링크
+            st.markdown(get_image_download_link(fig, '브랜드_AS_비율_파이.png', '파이차트 다운로드'), unsafe_allow_html=True)
         
         # 자산 데이터가 있는 경우 특정 브랜드에 대한 비교 그래프 표시
         if has_asset_data:
-            st.subheader("주요 브랜드별 자산 대비 AS 비율")
-            
             # 특정 브랜드만 선택
             selected_brands = ['도요타', '클라크', '두산', '현대', '니찌유', '비와이디']
             
@@ -1034,76 +1037,74 @@ if df is not None:
                 brand_comparison['자산 비율(%)'] = brand_comparison['자산 비율(%)'].replace(0, 0.1)
                 brand_comparison['AS/자산 비율'] = (brand_comparison['AS 비율(%)'] / brand_comparison['자산 비율(%)']).round(2)
                 
-                # 간단한 비교 막대 그래프
-                fig, ax = create_figure_with_korean(figsize=(12, 6), dpi=300)
-                
-                x = np.arange(len(brand_comparison))
-                width = 0.4
-                
-                # 막대 그래프 (두 값 나란히)
-                ax.bar(x - width/2, brand_comparison['자산 비율(%)'], width, 
-                    label='자산 비율(%)', color='#8ECAE6')
-                ax.bar(x + width/2, brand_comparison['AS 비율(%)'], width, 
-                    label='AS 비율(%)', color='#FB8500')
-                
-                # 축 설정
-                ax.set_xticks(x)
-                ax.set_xticklabels(brand_comparison['브랜드'], fontsize=11)
-                ax.legend(fontsize=11)
-                ax.set_title('주요 브랜드별 자산 및 AS 비율 비교', fontsize=14)
-                
-                # 값 표시
-                for i, v in enumerate(brand_comparison['자산 비율(%)']):
-                    ax.text(i - width/2, v + 0.5, f"{v:.1f}%", ha='center', va='bottom', fontsize=10)
-                
-                for i, v in enumerate(brand_comparison['AS 비율(%)']):
-                    ax.text(i + width/2, v + 0.5, f"{v:.1f}%", ha='center', va='bottom', fontsize=10)
-                
-                plt.tight_layout()
-                st.pyplot(fig)
-                
-                # 다운로드 링크
-                st.markdown(get_image_download_link(fig, '주요_브랜드_비율_비교.png', '비교 그래프 다운로드'), unsafe_allow_html=True)
-                
-                # AS/자산 비율 그래프 추가
-                st.subheader("주요 브랜드별 자산 대비 AS 비율")
-                
-                fig, ax = create_figure_with_korean(figsize=(12, 6), dpi=300)
-                
-                # 기준선 추가 (1.0 = 자산 대비 AS 비율이 동일)
-                plt.axhline(y=1, color='red', linestyle='--', alpha=0.7)
-                
-                # 색상 구분 (1보다 크면 빨간색 계열, 작으면 파란색 계열)
-                colors = ['#FB8500' if x > 1 else '#8ECAE6' for x in brand_comparison['AS/자산 비율']]
-                
-                # 막대 그래프
-                bars = ax.bar(brand_comparison['브랜드'], brand_comparison['AS/자산 비율'], color=colors)
-                
-                # 값 표시
-                for i, v in enumerate(brand_comparison['AS/자산 비율']):
-                    ax.text(i, v + 0.05, f"{v:.2f}", ha='center', va='bottom', fontsize=11)
+                with col2:
+                    # 간단한 비교 막대 그래프
+                    st.subheader("주요 브랜드 비율 비교")
                     
-                # 추가 설명 텍스트 (값의 의미)
-                for i, v in enumerate(brand_comparison['AS/자산 비율']):
-                    ax.text(i, v/2, f"{brand_comparison['AS 비율(%)'].iloc[i]:.1f}%\n÷\n{brand_comparison['자산 비율(%)'].iloc[i]:.1f}%", 
-                        ha='center', va='center', fontsize=9, color='white', fontweight='bold')
+                    fig, ax = create_figure_with_korean(figsize=(6, 6), dpi=200)
+                    
+                    x = np.arange(len(brand_comparison))
+                    width = 0.4
+                    
+                    # 막대 그래프 (두 값 나란히)
+                    ax.bar(x - width/2, brand_comparison['자산 비율(%)'], width, 
+                        label='자산 비율(%)', color='#8ECAE6')
+                    ax.bar(x + width/2, brand_comparison['AS 비율(%)'], width, 
+                        label='AS 비율(%)', color='#FB8500')
+                    
+                    # 축 설정
+                    ax.set_xticks(x)
+                    ax.set_xticklabels(brand_comparison['브랜드'], fontsize=8, rotation=45)
+                    ax.legend(fontsize=8)
+                    
+                    # 값 표시
+                    for i, v in enumerate(brand_comparison['자산 비율(%)']):
+                        ax.text(i - width/2, v + 0.5, f"{v:.1f}%", ha='center', va='bottom', fontsize=7)
+                    
+                    for i, v in enumerate(brand_comparison['AS 비율(%)']):
+                        ax.text(i + width/2, v + 0.5, f"{v:.1f}%", ha='center', va='bottom', fontsize=7)
+                    
+                    plt.tight_layout()
+                    st.pyplot(fig)
+                    
+                    # 다운로드 링크
+                    st.markdown(get_image_download_link(fig, '주요_브랜드_비율_비교.png', '비교 그래프 다운로드'), unsafe_allow_html=True)
                 
-                ax.set_title('주요 브랜드별 자산 대비 AS 비율', fontsize=14)
-                ax.set_ylabel('AS/자산 비율 (1.0 = 동일 비율)', fontsize=11)
-                
-                plt.tight_layout()
-                st.pyplot(fig)
-                
-                # 다운로드 링크
-                st.markdown(get_image_download_link(fig, '주요_브랜드_AS자산_비율.png', 'AS/자산 비율 다운로드'), unsafe_allow_html=True)
-                
-                # 간단한 설명 추가
-                st.info("""
-                **자산 대비 AS 비율 해석:**
-                - 1.0보다 큰 값: 해당 브랜드는 자산 비율보다 AS 비율이 더 높음 (AS 발생 빈도가 상대적으로 높음)
-                - 1.0과 같은 값: 해당 브랜드의 자산 비율과 AS 비율이 동일함
-                - 1.0보다 작은 값: 해당 브랜드는 자산 비율보다 AS 비율이 더 낮음 (AS 발생 빈도가 상대적으로 낮음)
-                """)
+                with col3:
+                    # AS/자산 비율 그래프
+                    st.subheader("주요 브랜드 AS/자산 비율")
+                    
+                    fig, ax = create_figure_with_korean(figsize=(6, 6), dpi=200)
+                    
+                    # 기준선 추가 (1.0 = 자산 대비 AS 비율이 동일)
+                    plt.axhline(y=1, color='red', linestyle='--', alpha=0.7)
+                    
+                    # 색상 구분 (1보다 크면 빨간색 계열, 작으면 파란색 계열)
+                    colors = ['#FB8500' if x > 1 else '#8ECAE6' for x in brand_comparison['AS/자산 비율']]
+                    
+                    # 막대 그래프
+                    bars = ax.bar(brand_comparison['브랜드'], brand_comparison['AS/자산 비율'], color=colors)
+                    
+                    # 값 표시
+                    for i, v in enumerate(brand_comparison['AS/자산 비율']):
+                        ax.text(i, v + 0.05, f"{v:.2f}", ha='center', va='bottom', fontsize=8)
+                    
+                    plt.xticks(rotation=45, fontsize=8)
+                    ax.set_ylabel('AS/자산 비율', fontsize=8)
+                    plt.tight_layout()
+                    st.pyplot(fig)
+                    
+                    # 다운로드 링크
+                    st.markdown(get_image_download_link(fig, '주요_브랜드_AS자산_비율.png', 'AS/자산 비율 다운로드'), unsafe_allow_html=True)
+        
+        # 간단한 설명 추가 (자산 데이터가 있는 경우)
+        if has_asset_data:
+            st.info("""
+            **자산 대비 AS 비율 해석:**
+            - 1.0보다 큰 값: 해당 브랜드는 자산 비율보다 AS 비율이 더 높음 (AS 발생 빈도가 상대적으로 높음)
+            - 1.0과 같은 값: 해당 브랜드의 자산 비율과 AS 비율이 동일함
+            - 1.0보다 작은 값: 해당 브랜드는 자산 비율보다 AS 비율이 더 낮음 (AS 발생 빈도가 상대적으로 낮음)
+            """)
         
         # 섹션 2: 모델 분석
         st.header("모델 분석")
@@ -1434,7 +1435,6 @@ if df is not None:
                                 # 다운로드 링크
                                 st.markdown(get_image_download_link(fig, f'{selected_brand}_연식별_AS자산_비율.png', 
                                                                 '연식별 AS/자산 비율 다운로드'), unsafe_allow_html=True)
-
 
     elif menu == "정비내용 분석":
         st.title("정비내용 분석")

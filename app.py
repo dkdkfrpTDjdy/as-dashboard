@@ -998,7 +998,7 @@ if df is not None:
                 labels=brand_as_ratio.index, 
                 autopct='%1.1f%%',
                 textprops={'fontsize': 8},
-                colors=sns.color_palette(f"{current_theme}_r", n_colors=len(sorted_brand_ratio))
+                colors=sns.color_palette(f"{current_theme}_r", n_colors=len(brand_as_ratio))
             )
             
             # 레이블 가독성 향상

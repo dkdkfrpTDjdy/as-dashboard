@@ -1435,6 +1435,7 @@ if df is not None:
                                 st.markdown(get_image_download_link(fig, f'{selected_brand}_연식별_AS자산_비율.png', 
                                                                 '연식별 AS/자산 비율 다운로드'), unsafe_allow_html=True)
 
+
     elif menu == "정비내용 분석":
         st.title("정비내용 분석")
         

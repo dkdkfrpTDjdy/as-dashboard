@@ -1152,7 +1152,7 @@ if df is not None:
             
             # 간결한 값 표시
             for i, v in enumerate(model_as_ratio.values):
-                ax.text(v + 0.1, i, f"{v:.1f}%", va='center', fontsize=8)
+                ax.text(v + 0.01, i, f"{v:.1f}%", va='center', fontsize=8)
             
             ax.set_xlabel('AS 비율 (%)')
             plt.tight_layout()
@@ -1165,7 +1165,7 @@ if df is not None:
         with col2:
             # 고장 유형 분석 (있는 경우)
             if '고장유형' in brand_df.columns:
-                st.subheader(f"{brand_title}고장 유형 분석 (상위 10개)")
+                st.subheader(f"{brand_title}고장 유형 분석")
                 
                 fault_counts = brand_df['고장유형'].value_counts().head(15)
                 fault_ratio = (fault_counts / brand_total_as * 100).round(1)
@@ -1175,7 +1175,7 @@ if df is not None:
                 
                 # 간결한 값 표시
                 for i, v in enumerate(fault_ratio.values):
-                    ax.text(v + 0.1, i, f"{v:.1f}%", va='center', fontsize=8)
+                    ax.text(v + 0.01, i, f"{v:.1f}%", va='center', fontsize=8)
                 
                 ax.set_xlabel('고장유형 비율 (%)')
                 plt.tight_layout()
@@ -1398,10 +1398,10 @@ if df is not None:
                                 
                                 # 간결한 값 표시
                                 for i, v in enumerate(year_comparison['자산 비율(%)']):
-                                    ax.text(i - width/2, v + 0.2, f"{v:.1f}%", ha='center', fontsize=4)
+                                    ax.text(i - width/2, v + 0.2, f"{v:.1f}", ha='center', fontsize=4)
                                 
                                 for i, v in enumerate(year_comparison['AS 비율(%)']):
-                                    ax.text(i + width/2, v + 0.2, f"{v:.1f}%", ha='center', fontsize=4)
+                                    ax.text(i + width/2, v + 0.2, f"{v:.1f}", ha='center', fontsize=4)
                                 
                                 plt.tight_layout()
                                 st.pyplot(fig)

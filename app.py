@@ -1398,10 +1398,10 @@ if df is not None:
                                 
                                 # 간결한 값 표시
                                 for i, v in enumerate(year_comparison['자산 비율(%)']):
-                                    ax.text(i - width/2, v + 0.2, f"{v:.1f}", ha='center', fontsize=4)
+                                    ax.text(i - width/2, v + 0.02, f"{v:.1f}", ha='center', fontsize=4)
                                 
                                 for i, v in enumerate(year_comparison['AS 비율(%)']):
-                                    ax.text(i + width/2, v + 0.2, f"{v:.1f}", ha='center', fontsize=4)
+                                    ax.text(i + width/2, v + 0.01, f"{v:.1f}", ha='center', fontsize=4)
                                 
                                 plt.tight_layout()
                                 st.pyplot(fig)

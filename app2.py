@@ -231,9 +231,6 @@ df4 = None  # 조직도 데이터
 uploaded_file1 = st.sidebar.file_uploader("**정비일지 데이터 업로드**", type=["xlsx"])
 uploaded_file3 = st.sidebar.file_uploader("**수리비 데이터 업로드**", type=["xlsx"])
 
-# 자동 로드되는 파일 안내
-st.sidebar.info("자산조회 데이터와 조직도 데이터는 자동으로 로드됩니다.")
-
 # 사용자 업로드 파일 처리
 if uploaded_file1 is not None:
     df1 = load_data(uploaded_file1)
@@ -248,18 +245,14 @@ try:
     # 자산조회 데이터 로드 (같은 레포지토리 내 파일)
     asset_data_path = "data/자산조회데이터.xlsx"
     df2 = pd.read_excel(asset_data_path)
-    st.sidebar.success("자산조회 데이터가 성공적으로 로드되었습니다.")
 except Exception as e:
-    st.sidebar.warning(f"자산조회 데이터를 로드할 수 없습니다: {e}")
     df2 = None
 
 try:
     # 조직도 데이터 로드 (같은 레포지토리 내 파일)
     org_data_path = "data/조직도데이터.xlsx"
     df4 = pd.read_excel(org_data_path)
-    st.sidebar.success("조직도 데이터가 성공적으로 로드되었습니다.")
 except Exception as e:
-    st.sidebar.warning(f"조직도 데이터를 로드할 수 없습니다: {e}")
     df4 = None
 
 # 데이터 병합 및 전처리
@@ -267,7 +260,6 @@ if df1 is not None:
     # 자산 데이터와 병합
     if df2 is not None:
         df1 = merge_dataframes(df1, df2)
-        st.sidebar.success("정비일지와 자산조회 파일이 성공적으로 병합되었습니다.")
     
     # 최근 정비일자 계산
     df1 = calculate_previous_maintenance_dates(df1)
@@ -275,7 +267,6 @@ if df1 is not None:
     # 조직도 데이터 매핑
     if df4 is not None:
         df1 = map_employee_data(df1, df4)
-        st.sidebar.success("정비일지에 조직도 정보가 매핑되었습니다.")
     
     # 날짜 변환 - 오류 수정
     try:
@@ -307,7 +298,6 @@ if df3 is not None:
     # 조직도 데이터 매핑
     if df4 is not None:
         df3 = map_employee_data(df3, df4)
-        st.sidebar.success("수리비 데이터에 조직도 정보가 매핑되었습니다.")
 
     try:
         # 날짜 변환

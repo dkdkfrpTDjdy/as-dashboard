@@ -93,7 +93,7 @@ def extract_region_from_address(address):
 
 # 현장 컬럼에서 지역 추출 및 적용
 def extract_and_apply_region(df):
-    if 'current' in df.columns:
+    if '현장' in df.columns:  # 'current'가 아니라 '현장'으로 수정
         # 지역 추출
         df['지역'] = df['현장'].apply(extract_region_from_address)
         st.sidebar.success("지역 정보 추출이 완료되었습니다.")
@@ -152,54 +152,64 @@ def calculate_previous_maintenance_dates(df):
     
     return df
 
-# 조직도 데이터와 정비자번호/출고자 매핑 함수
+# 조직도 데이터와 정비자번호/출고자 매핑 함수 (통합 버전)
 def map_employee_data(df, org_df):
     if org_df is None or df is None:
         return df
-        
+    
     try:
+        # 결과 데이터프레임 복사
+        result_df = df.copy()
+        org_temp = org_df.copy()
+        
+        # 조직도의 사번을 문자열로 통일
+        org_temp['사번'] = org_temp['사번'].astype(str)
+        
         # 정비일지 데이터인 경우 (정비자번호 있음)
-        if '정비자번호' in df.columns and '사번' in org_df.columns:
-            # 데이터 타입 변환 - 문자열로 통일
-            df['정비자번호'] = df['정비자번호'].astype(str)
-            org_df['사번'] = org_df['사번'].astype(str)
+        if '정비자번호' in result_df.columns:
+            # 정비자번호를 문자열로 변환
+            result_df['정비자번호'] = result_df['정비자번호'].astype(str)
             
-            # 사번과 정비자번호 매핑
-            df = pd.merge(df, org_df[['사번', '소속']],
-                        left_on='정비자번호', right_on='사번', how='left')
-                        
-            # 컬럼명 변경
-            df.rename(columns={'소속': '정비자소속'}, inplace=True)
+            # 소속 정보만 가져오기 (left join)
+            result_df = pd.merge(
+                result_df,
+                org_temp[['사번', '소속']],
+                left_on='정비자번호',
+                right_on='사번',
+                how='left'
+            )
             
-            # 중복 컬럼 제거 (사번_y)
-            if '사번_y' in df.columns:
-                df = df.drop('사번_y', axis=1)
-            if '사번_x' in df.columns:
-                df = df.rename(columns={'사번_x': '사번'})
-                    
+            # 소속 컬럼명 변경 및 중복 컬럼 제거
+            result_df.rename(columns={'소속': '정비자소속'}, inplace=True)
+            if '사번' in result_df.columns:
+                result_df.drop('사번', axis=1, inplace=True)
+        
         # 수리비 데이터인 경우 (출고자 있음)
-        if '출고자' in df.columns and '사번' in org_df.columns:
-            # 출고자와 사번 데이터 타입 통일
-            if '정비자번호' in df.columns:
-                df['정비자번호'] = df['정비자번호'].astype(str)
-            org_df['사번'] = org_df['사번'].astype(str)
+        elif '출고자' in result_df.columns:
+            # 출고자를 문자열로 변환
+            result_df['출고자'] = result_df['출고자'].astype(str)
             
-            # 사번과 출고자 매핑
-            df = pd.merge(df, org_df[['사번', '소속']],
-                        left_on='정비자번호', right_on='사번', how='left')
-                        
-            # 컬럼명 변경
-            df.rename(columns={'소속': '출고자소속'}, inplace=True)
+            # 소속 정보만 가져오기 (left join)
+            result_df = pd.merge(
+                result_df,
+                org_temp[['사번', '소속']],
+                left_on='출고자',
+                right_on='사번',
+                how='left'
+            )
             
-            # 중복 컬럼 제거
-            if '사번_y' in df.columns:
-                df = df.drop('사번_y', axis=1)
-            if '사번_x' in df.columns:
-                df = df.rename(columns={'사번_x': '사번'})
-                    
-        return df
+            # 소속 컬럼명 변경 및 중복 컬럼 제거
+            result_df.rename(columns={'소속': '출고자소속'}, inplace=True)
+            if '사번' in result_df.columns:
+                result_df.drop('사번', axis=1, inplace=True)
+        
+        return result_df
+        
     except Exception as e:
+        import streamlit as st
         st.error(f"직원 데이터 매핑 중 오류 발생: {e}")
+        import traceback
+        st.error(traceback.format_exc())  # 상세 오류 정보 출력
         return df
 
 # 폰트 설정 실행

@@ -73,18 +73,31 @@ def create_figure_with_korean(figsize=(10, 6), dpi=300):
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     return fig, ax
 
-# 주소에서 지역 추출 함수
+# 주소에서 지역 추출 함수 개선 버전
 def extract_region_from_address(address):
     if not isinstance(address, str):
         return None
     
-    # 주소 형태인 경우만 처리 (시/도로 시작하는 경우)
-    if len(address) >= 2:
+    # 주소 형태인 경우만 처리
+    if len(address) >= 3:  # 최소 "시/도 " 형태 (3글자 이상) 필요
         first_two = address[:2]
-        if first_two in ['서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종', 
-                         '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주']:
+        
+        # 시/도 약칭 리스트
+        regions = ['서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종', 
+                  '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주']
+        
+        # 첫 두 글자가 시/도이고 그 뒤에 공백이 있으면 주소로 간주
+        if first_two in regions and address[2] == ' ':
             return first_two
     return None
+
+# 현장 컬럼에서 지역 추출 및 적용
+def extract_and_apply_region(df):
+    if 'current' in df.columns:
+        # 지역 추출
+        df['지역'] = df['현장'].apply(extract_region_from_address)
+        st.sidebar.success("지역 정보 추출이 완료되었습니다.")
+    return df
 
 # 문자열 리스트로 변환하는 함수 (NaN과 혼합 유형 처리용)
 def convert_to_str_list(arr):
@@ -260,6 +273,7 @@ if df1 is not None:
     # 자산 데이터와 병합
     if df2 is not None:
         df1 = merge_dataframes(df1, df2)
+        st.sidebar.success("정비일지와 자산조회 파일이 성공적으로 병합되었습니다.")
     
     # 최근 정비일자 계산
     df1 = calculate_previous_maintenance_dates(df1)
@@ -267,6 +281,10 @@ if df1 is not None:
     # 조직도 데이터 매핑
     if df4 is not None:
         df1 = map_employee_data(df1, df4)
+        st.sidebar.success("정비일지에 조직도 정보가 매핑되었습니다.")
+    
+    # 현장 컬럼에서 지역 정보 추출
+    df1 = extract_and_apply_region(df1)
     
     # 날짜 변환 - 오류 수정
     try:

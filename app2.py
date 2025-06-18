@@ -96,7 +96,6 @@ def extract_and_apply_region(df):
     if '현장' in df.columns:  # 'current'가 아니라 '현장'으로 수정
         # 지역 추출
         df['지역'] = df['현장'].apply(extract_region_from_address)
-        st.sidebar.success("지역 정보 추출이 완료되었습니다.")
     return df
 
 # 문자열 리스트로 변환하는 함수 (NaN과 혼합 유형 처리용)
@@ -143,7 +142,6 @@ def merge_dataframes(df1, df2):
         if '자재내역' in merged_df.columns:
             # 자재내역에서 추가 정보 추출 (공백으로 나누기)
             merged_df[['연료', '운전방식', '적재용량', '마스트']] = merged_df['자재내역'].str.split(' ', n=3, expand=True)
-            st.sidebar.success(f"자재내역 분할 완료: 연료, 운전방식, 적재용량, 마스트 컬럼이 생성되었습니다.")
         
         # 브랜드_모델 컬럼 재생성 (병합 후)
         if '브랜드' in merged_df.columns and '모델명' in merged_df.columns:
@@ -324,7 +322,6 @@ if df1 is not None:
     # 자산 데이터와 병합
     if df2 is not None:
         df1 = merge_dataframes(df1, df2)
-        st.sidebar.success("정비일지와 자산조회 파일이 성공적으로 병합되었습니다.")
     
     # 최근 정비일자 계산
     df1 = calculate_previous_maintenance_dates(df1)
@@ -332,7 +329,6 @@ if df1 is not None:
     # 조직도 데이터 매핑
     if df4 is not None:
         df1 = map_employee_data(df1, df4)
-        st.sidebar.success("정비일지에 조직도 정보가 매핑되었습니다.")
     
     # 현장 컬럼에서 지역 정보 추출
     df1 = extract_and_apply_region(df1)
@@ -367,8 +363,6 @@ if df3 is not None:
     # 조직도 데이터 매핑
     if df4 is not None:
         df3 = map_employee_data(df3, df4)
-        st.sidebar.success("수리비에 조직도 정보가 매핑되었습니다.")
-
     try:
         # 날짜 변환
         if '출고일자' in df3.columns:

@@ -67,6 +67,534 @@ font_path = setup_korean_font_test()
 # 이후 코드에서 사용 가능
 if font_path and os.path.exists(font_path):
     fm.fontManager.addfont(font_path)
+
+# 정비일지 대시보드 표시 함수
+def display_maintenance_dashboard(df, category_name):
+    # 지표 카드용 컬럼 생성
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        total_cases = len(df)
+        st.metric(f"{category_name} AS 건수", f"{total_cases:,}")
+    
+    with col2:
+        if '가동시간' in df.columns:
+            avg_operation = df['가동시간'].mean()
+            st.metric("평균 가동시간", f"{avg_operation:.2f}시간")
+        else:
+            st.metric("평균 가동시간", "데이터 없음")
+    
+    with col3:
+        if '수리시간' in df.columns:
+            avg_repair = df['수리시간'].mean()
+            st.metric("평균 수리시간", f"{avg_repair:.2f}시간")
+        else:
+            st.metric("평균 수리시간", "데이터 없음")
+    
+    with col4:
+        if '정비일자' in df.columns:
+            last_month = df['정비일자'].max().strftime('%Y-%m')
+            last_month_count = df[df['정비일자'].dt.strftime('%Y-%m') == last_month].shape[0]
+            st.metric("최근 월 AS 건수", f"{last_month_count:,}")
+        else:
+            st.metric("최근 월 AS 건수", "데이터 없음")
+            
+    st.markdown("---")
+    
+    # 1. 월별 AS건수 + 월별 평균 가동 및 수리시간 + 수리시간 분포
+    col1, col2, col3 = st.columns(3)
+        
+    with col1:
+        # 월별 AS 건수
+        st.subheader("월별 AS 건수")
+        if '정비일자' in df.columns:
+            df_time = df.copy()
+            df_time['월'] = df_time['정비일자'].dt.to_period('M')
+            monthly_counts = df_time.groupby('월').size().reset_index(name='건수')
+            monthly_counts['월'] = monthly_counts['월'].astype(str)
+            
+            # 고해상도 그래프를 위한 설정
+            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+            sns.barplot(x='월', y='건수', data=monthly_counts, ax=ax, palette='Blues')
+            
+            # 막대 위에 텍스트 표시
+            for i, v in enumerate(monthly_counts['건수']):
+                ax.text(i, v + max(monthly_counts['건수']) * 0.01, str(v), ha='center')
+            
+            plt.xticks(rotation=45)
+            ax.set_ylabel('건수')
+            plt.tight_layout()  # 여백 자동 조정
+            
+            # 고품질 표시 옵션 추가
+            st.pyplot(fig, use_container_width=True)
+            
+            # 다운로드 링크 추가
+            st.markdown(get_image_download_link(fig, f'{category_name}_월별_AS_건수.png', '월별 AS 건수 다운로드'), unsafe_allow_html=True)
+            
+    with col2:
+        if '가동시간' in df.columns:
+            st.subheader("월별 평균 가동시간")
+            if '정비일자' in df.columns:
+                df['월'] = df['정비일자'].dt.to_period('M')
+                # 이후 그래프 생성
+            else:
+                st.warning("정비일자 컬럼이 없습니다. 월별 분석을 건너뜁니다.")
+                
+            monthly_avg = df.groupby('월')['가동시간'].mean().reset_index()
+            
+            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+            sns.barplot(data=monthly_avg, x='월', y='가동시간', ax=ax, palette="Blues")
+            
+            # 평균값 텍스트 표시
+            for index, row in monthly_avg.iterrows():
+                ax.text(index, row['가동시간'] + 0.2, f"{row['가동시간']:.1f}시간", ha='center')
+            
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+            
+            st.pyplot(fig, use_container_width=True)
+            
+            # 다운로드 링크 추가
+            st.markdown(get_image_download_link(fig, f'{category_name}_월별_평균_가동시간.png', '월별 평균 가동시간 다운로드'), unsafe_allow_html=True)
+        
+    with col3:
+        if '수리시간' in df.columns:
+            st.subheader("수리시간 분포")
+
+            # 수리시간 구간화
+            bins = [0, 2, 4, 8, 12, 24, float('inf')]
+            labels = ['0-2시간', '2-4시간', '4-8시간', '8-12시간', '12-24시간', '24시간 이상']
+            df['수리시간_구간'] = pd.cut(df['수리시간'], bins=bins, labels=labels)
+            repair_time_counts = df['수리시간_구간'].value_counts().sort_index()
+
+            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+            sns.barplot(x=repair_time_counts.index, y=repair_time_counts.values, ax=ax, palette="Blues")
+
+            # 막대 위에 텍스트 표시
+            for i, v in enumerate(repair_time_counts.values):
+                ax.text(i, v + max(repair_time_counts.values) * 0.02, str(v),
+                        ha='center', fontsize=12)
+
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+            st.pyplot(fig, use_container_width=True)
+
+            st.markdown(get_image_download_link(fig, f'{category_name}_수리시간_분포.png', '수리시간 분포 다운로드'), unsafe_allow_html=True)
+            
+    st.markdown("---")
+    
+    # 2. 가동률 분석 + 수리시간 분석 + 지역별 AS 건수
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        # 가동률 분석 추가
+        st.subheader("장비 가동률")
+        
+        # 유효한 데이터만 사용
+        valid_operation = df.dropna(subset=['가동시간', '수리시간']).copy()
+        
+        if len(valid_operation) > 0:
+            # 가동률 = 가동시간 / (가동시간 + 수리시간)
+            valid_operation['가동률'] = valid_operation['가동시간'] / (valid_operation['가동시간'] + valid_operation['수리시간'])
+            valid_operation['가동률'] = valid_operation['가동률'] * 100  # 퍼센트로 변환
+            
+            # 가동률 구간화
+            bins = [0, 80, 90, 95, 100]
+            labels = ['80% 미만', '80-90%', '90-95%', '95% 이상']
+            valid_operation['가동률_구간'] = pd.cut(valid_operation['가동률'], bins=bins, labels=labels)
+            operation_rate_counts = valid_operation['가동률_구간'].value_counts().sort_index()
+            
+            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+            sns.barplot(x=operation_rate_counts.index, y=operation_rate_counts.values, ax=ax, palette="Blues")
+            
+            # 막대 위에 텍스트 표시
+            for i, v in enumerate(operation_rate_counts.values):
+                ax.text(i, v + max(operation_rate_counts.values) * 0.02, str(v),
+                      ha='center', fontsize=12)
+            
+            plt.tight_layout()
+            st.pyplot(fig, use_container_width=True)
+            
+            # 다운로드 링크 추가
+            st.markdown(get_image_download_link(fig, f'{category_name}_가동률_분포.png', '가동률 분포 다운로드'), unsafe_allow_html=True)
+            
+            # 평균 가동률 정보 추가
+            avg_operation_rate = valid_operation['가동률'].mean()
+            st.info(f"평균 가동률: {avg_operation_rate:.2f}%")
+            
+        else:
+            st.warning("가동시간 및 수리시간 데이터가 부족합니다.")
+            
+    with col2:
+        if '수리시간' in df.columns and '가동시간' in df.columns:
+            st.subheader("수리시간 vs 가동시간")
+            
+            # 산점도 데이터 준비
+            scatter_df = df.dropna(subset=['가동시간', '수리시간']).copy()
+            
+            if len(scatter_df) > 0:
+                # 일부 데이터만 표시 (최대 1000개)
+                if len(scatter_df) > 1000:
+                    scatter_df = scatter_df.sample(1000, random_state=42)
+                
+                fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+                scatter = ax.scatter(
+                    scatter_df['가동시간'], 
+                    scatter_df['수리시간'],
+                    alpha=0.6,
+                    c=scatter_df['가동시간'] / (scatter_df['가동시간'] + scatter_df['수리시간']),
+                    cmap='viridis'
+                )
+                
+                # 추세선 추가
+                z = np.polyfit(scatter_df['가동시간'], scatter_df['수리시간'], 1)
+                p = np.poly1d(z)
+                ax.plot(scatter_df['가동시간'], p(scatter_df['가동시간']), "r--", alpha=0.8)
+                
+                ax.set_xlabel('가동시간 (시간)')
+                ax.set_ylabel('수리시간 (시간)')
+                
+                # 컬러바 추가
+                cbar = plt.colorbar(scatter)
+                cbar.set_label('가동률')
+                
+                plt.tight_layout()
+                st.pyplot(fig, use_container_width=True)
+                
+                # 다운로드 링크 추가
+                st.markdown(get_image_download_link(fig, f'{category_name}_가동시간_수리시간_산점도.png', '가동시간 vs 수리시간 다운로드'), unsafe_allow_html=True)
+                
+                # 상관계수 표시
+                corr = scatter_df['가동시간'].corr(scatter_df['수리시간'])
+                st.info(f"가동시간과 수리시간의 상관계수: {corr:.3f}")
+            else:
+                st.warning("가동시간 및 수리시간 데이터가 부족합니다.")
+    
+    with col3:
+        # 지역별 빈도 분석
+        st.subheader("지역별 AS 건수")
+        if '지역' in df.columns:
+            df_clean = df.dropna(subset=['지역']).copy()
+            
+            region_counts = df_clean['지역'].value_counts()
+            region_counts = region_counts.dropna()
+            
+            # 최소 빈도수 처리 및 상위 15개 표시
+            others_count = region_counts[region_counts < 3].sum()
+            region_counts = region_counts[region_counts >= 3]
+            if others_count > 0:
+                region_counts['기타'] = others_count
+            
+            region_counts = region_counts.sort_values(ascending=False).nlargest(20)
+            
+            # 시각화
+            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+            blue_palette = sns.color_palette("Blues", n_colors=len(region_counts))
+            
+            sns.barplot(x=region_counts.index, y=region_counts.values, ax=ax, palette=blue_palette)
+            
+            # 막대 위에 텍스트 표시
+            for i, v in enumerate(region_counts.values):
+                ax.text(i, v + max(region_counts.values) * 0.02, str(v),
+                       ha='center', fontsize=12)
+            
+            plt.tight_layout()
+            plt.xticks(rotation=45)
+            st.pyplot(fig, use_container_width=True)
+            
+            # 다운로드 링크 추가
+            st.markdown(get_image_download_link(fig, f'{category_name}_지역별_AS_현황.png', '지역별 AS 현황 다운로드'), unsafe_allow_html=True)
+        else:
+            st.warning("지역 정보가 없습니다.")
+    
+    # 추가: 브랜드별 평균 수리시간
+    if '브랜드' in df.columns and '수리시간' in df.columns:
+        st.subheader("브랜드별 평균 수리시간")
+        
+        # 브랜드별 평균 수리시간 계산
+        brand_repair_times = df.groupby('브랜드')['수리시간'].agg(['mean', 'count']).reset_index()
+        brand_repair_times = brand_repair_times.sort_values(by='mean', ascending=False)
+        brand_repair_times = brand_repair_times[brand_repair_times['count'] >= 5]  # 데이터가 충분한 브랜드만
+        
+        if len(brand_repair_times) > 0:
+            fig, ax = create_figure_with_korean(figsize=(12, 6), dpi=300)
+            
+            # 막대 그래프 생성
+            bars = sns.barplot(x='브랜드', y='mean', data=brand_repair_times.head(15), ax=ax, palette="Blues_r")
+            
+            # 막대 위에 텍스트 표시
+            for i, v in enumerate(brand_repair_times['mean'].head(15)):
+                ax.text(i, v + 0.1, f"{v:.2f}시간", ha='center')
+            
+            ax.set_xlabel('브랜드')
+            ax.set_ylabel('평균 수리시간 (시간)')
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+            
+            st.pyplot(fig, use_container_width=True)
+            
+            # 다운로드 링크 추가
+            st.markdown(get_image_download_link(fig, f'{category_name}_브랜드별_평균수리시간.png', '브랜드별 평균수리시간 다운로드'), unsafe_allow_html=True)
+        else:
+            st.warning("브랜드별 수리시간 데이터가 부족합니다.")
+    
+    # 정비자 소속별 분석 (조직도 데이터가 있는 경우)
+    if '정비자소속' in df.columns:
+        st.subheader("정비자 소속별 분석")
+                
+        col1, col2 = st.columns(2)
+                
+        with col1:
+            # 소속별 정비 건수
+            dept_counts = df['정비자소속'].value_counts().head(10)
+                        
+            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+            sns.barplot(x=dept_counts.values, y=dept_counts.index, ax=ax, palette="Blues_r")
+                        
+            # 막대 위에 텍스트 표시
+            for i, v in enumerate(dept_counts.values):
+                ax.text(v + 0.5, i, str(v), va='center')
+                        
+            ax.set_xlabel('정비 건수')
+            plt.tight_layout()
+                        
+            st.pyplot(fig, use_container_width=True)
+            st.markdown(get_image_download_link(fig, f'{category_name}_소속별_정비건수.png', '소속별 정비건수 다운로드'), unsafe_allow_html=True)
+                
+        with col2:
+            # 소속별 평균 수리시간
+            if '수리시간' in df.columns:
+                dept_avg_repair = df.groupby('정비자소속')['수리시간'].mean().sort_values(ascending=False).head(10)
+                                
+                fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+                sns.barplot(x=dept_avg_repair.values, y=dept_avg_repair.index, ax=ax, palette="Blues_r")
+                                
+                # 막대 위에 텍스트 표시
+                for i, v in enumerate(dept_avg_repair.values):
+                    ax.text(v + 0.1, i, f"{v:.1f}시간", va='center')
+                                
+                ax.set_xlabel('평균 수리시간')
+                plt.tight_layout()
+                                
+                st.pyplot(fig, use_container_width=True)
+                st.markdown(get_image_download_link(fig, f'{category_name}_소속별_평균수리시간.png', '소속별 평균수리시간 다운로드'), unsafe_allow_html=True)
+            else:
+                st.warning("수리시간 데이터가 없습니다.")
+
+# 수리비 대시보드 표시 함수
+def display_repair_cost_dashboard(df):
+    if df is None:
+        st.warning("수리비 데이터가 없습니다.")
+        return
+    
+    # 기본 지표
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        total_cases = len(df)
+        st.metric("총 수리 건수", f"{total_cases:,}")
+    
+    with col2:
+        if '금액' in df.columns:
+            total_cost = df['금액'].sum()
+            st.metric("총 수리비용", f"{total_cost:,.0f}원")
+        else:
+            for col in df.columns:
+                if '금액' in col or '비용' in col:
+                    total_cost = df[col].sum()
+                    st.metric("총 수리비용", f"{total_cost:,.0f}원")
+                    break
+            else:
+                st.metric("총 수리비용", "데이터 없음")
+    
+    with col3:
+        if '출고일자' in df.columns:
+            last_month = df['출고일자'].max().strftime('%Y-%m')
+            last_month_count = df[df['출고일자'].dt.strftime('%Y-%m') == last_month].shape[0]
+            st.metric("최근 월 수리 건수", f"{last_month_count:,}")
+        else:
+            st.metric("최근 월 수리 건수", "데이터 없음")
+    
+    with col4:
+        if '출고자소속' in df.columns:
+            dept_counts = df['출고자소속'].value_counts()
+            top_dept = dept_counts.index[0] if not dept_counts.empty else "정보 없음"
+            top_dept_count = dept_counts.iloc[0] if not dept_counts.empty else 0
+            st.metric("최다 출고 소속", f"{top_dept} ({top_dept_count}건)")
+        else:
+            st.metric("최다 출고 소속", "데이터 없음")
+    
+    st.markdown("---")
+    
+    # 월별 수리 건수 및 비용
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.subheader("월별 수리 건수")
+        if '출고일자' in df.columns:
+            df_time = df.copy()
+            df_time['월'] = df_time['출고일자'].dt.to_period('M')
+            monthly_counts = df_time.groupby('월').size().reset_index(name='건수')
+            monthly_counts['월'] = monthly_counts['월'].astype(str)
+            
+            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+            sns.barplot(x='월', y='건수', data=monthly_counts, ax=ax, palette='Purples')
+            
+            # 막대 위에 텍스트 표시
+            for i, v in enumerate(monthly_counts['건수']):
+                ax.text(i, v + max(monthly_counts['건수']) * 0.01, str(v), ha='center')
+            
+            plt.xticks(rotation=45)
+            ax.set_ylabel('건수')
+            plt.tight_layout()
+            
+            st.pyplot(fig, use_container_width=True)
+            st.markdown(get_image_download_link(fig, '월별_수리_건수.png', '월별 수리 건수 다운로드'), unsafe_allow_html=True)
+    
+    with col2:
+        st.subheader("월별 수리 비용")
+        if '출고일자' in df.columns and ('금액' in df.columns or any('금액' in col for col in df.columns)):
+            df_time = df.copy()
+            df_time['월'] = df_time['출고일자'].dt.to_period('M')
+            
+            # 금액 컬럼 찾기
+            cost_col = '금액' if '금액' in df.columns else next((col for col in df.columns if '금액' in col), None)
+            
+            if cost_col:
+                monthly_costs = df_time.groupby('월')[cost_col].sum().reset_index()
+                monthly_costs['월'] = monthly_costs['월'].astype(str)
+                
+                fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+                sns.barplot(x='월', y=cost_col, data=monthly_costs, ax=ax, palette='Purples')
+                
+                # 막대 위에 텍스트 표시 (천 단위 구분)
+                for i, v in enumerate(monthly_costs[cost_col]):
+                    ax.text(i, v + max(monthly_costs[cost_col]) * 0.01, f"{v:,.0f}", ha='center', fontsize=8)
+                
+                plt.xticks(rotation=45)
+                ax.set_ylabel('비용 (원)')
+                plt.tight_layout()
+                
+                st.pyplot(fig, use_container_width=True)
+                st.markdown(get_image_download_link(fig, '월별_수리_비용.png', '월별 수리 비용 다운로드'), unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # 소속별 수리 건수 및 비용
+    if '출고자소속' in df.columns:
+        st.subheader("소속별 수리 현황")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # 소속별 수리 건수
+            dept_counts = df['출고자소속'].value_counts().head(10)
+            
+            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+            sns.barplot(x=dept_counts.values, y=dept_counts.index, ax=ax, palette="Purples_r")
+            
+            # 막대 위에 텍스트 표시
+            for i, v in enumerate(dept_counts.values):
+                ax.text(v + 0.5, i, str(v), va='center')
+            
+            ax.set_xlabel('수리 건수')
+            plt.tight_layout()
+            
+            st.pyplot(fig, use_container_width=True)
+            st.markdown(get_image_download_link(fig, '소속별_수리건수.png', '소속별 수리건수 다운로드'), unsafe_allow_html=True)
+        
+        with col2:
+            # 소속별 수리 비용
+            cost_col = '금액' if '금액' in df.columns else next((col for col in df.columns if '금액' in col), None)
+            
+            if cost_col:
+                dept_costs = df.groupby('출고자소속')[cost_col].sum().sort_values(ascending=False).head(10)
+                
+                fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+                sns.barplot(x=dept_costs.values, y=dept_costs.index, ax=ax, palette="Purples_r")
+                
+                # 막대 위에 텍스트 표시 (천 단위 구분)
+                for i, v in enumerate(dept_costs.values):
+                    ax.text(v + max(dept_costs.values) * 0.01, i, f"{v:,.0f}", va='center', fontsize=8)
+                
+                ax.set_xlabel('수리 비용 (원)')
+                plt.tight_layout()
+                
+                st.pyplot(fig, use_container_width=True)
+                st.markdown(get_image_download_link(fig, '소속별_수리비용.png', '소속별 수리비용 다운로드'), unsafe_allow_html=True)
+    
+    # 소속별 인원 대비 수리 건수 (조직도 데이터가 있는 경우)
+    if '출고자소속' in df.columns and df4 is not None and '소속' in df4.columns:
+        st.subheader("소속별 인원 대비 수리 건수")
+        
+        # 소속별 인원 수 계산
+        dept_staff = df4.groupby('소속').size()
+        
+        # 소속별 수리 건수
+        repair_by_dept = df.groupby('출고자소속').size()
+        
+        # 공통 소속만 추출
+        common_depts = sorted(set(dept_staff.index) & set(repair_by_dept.index))
+        
+        if common_depts:
+            # 데이터 준비
+            dept_comparison = pd.DataFrame({
+                '소속': common_depts,
+                '인원수': [dept_staff.get(dept, 0) for dept in common_depts],
+                '수리건수': [repair_by_dept.get(dept, 0) for dept in common_depts]
+            })
+            
+            # 인원 대비 수리 건수 비율 계산
+            dept_comparison['인원당수리건수'] = (dept_comparison['수리건수'] / dept_comparison['인원수']).round(2)
+            dept_comparison = dept_comparison.sort_values('인원당수리건수', ascending=False).head(10)
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # 소속별 인원 및 수리 건수 비교
+                fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+                
+                x = np.arange(len(dept_comparison))
+                width = 0.4
+                
+                # 인원 수 (정규화)
+                max_staff = dept_comparison['인원수'].max()
+                max_repair = dept_comparison['수리건수'].max()
+                scale_factor = max_repair / max_staff if max_staff > 0 else 1
+                
+                ax.bar(x - width/2, dept_comparison['인원수'] * scale_factor, width, 
+                      label='인원수 (정규화)', color='#8ECAE6', alpha=0.7)
+                ax.bar(x + width/2, dept_comparison['수리건수'], width, 
+                      label='수리건수', color='#9370DB')
+                
+                # 축 설정
+                ax.set_xticks(x)
+                ax.set_xticklabels(dept_comparison['소속'], rotation=45, ha='right')
+                ax.legend()
+                
+                # 보조 y축 추가 (실제 인원수)
+                ax2 = ax.twinx()
+                ax2.set_ylim(0, max_staff * 1.1)
+                ax2.set_ylabel('실제 인원수')
+                
+                plt.tight_layout()
+                st.pyplot(fig, use_container_width=True)
+                st.markdown(get_image_download_link(fig, '소속별_인원수리건수_비교.png', '소속별 인원수리건수 비교 다운로드'), unsafe_allow_html=True)
+            
+            with col2:
+                # 인원당 수리 건수
+                fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+                sns.barplot(x=dept_comparison['인원당수리건수'], y=dept_comparison['소속'], ax=ax, palette="Purples_r")
+                
+                # 막대 위에 텍스트 표시
+                for i, v in enumerate(dept_comparison['인원당수리건수']):
+                    ax.text(v + 0.1, i, f"{v:.2f}", va='center')
+                
+                ax.set_xlabel('인원당 수리 건수')
+                plt.tight_layout()
+                
+                st.pyplot(fig, use_container_width=True)
+                st.markdown(get_image_download_link(fig, '소속별_인원당수리건수.png', '소속별 인원당수리건수 다운로드'), unsafe_allow_html=True)
  
 # 그래프 다운로드 기능 추가
 def get_image_download_link(fig, filename, text):
@@ -237,7 +765,7 @@ def map_employee_data(df, org_df):
         if '출고자' in df.columns and '사번' in org_df.columns:
             # 사번과 출고자 매핑
             df = pd.merge(df, org_df[['사번', '소속']],
-                         left_on='출고자', right_on='사번', how='left')
+                        left_on='정비자번호', right_on='사번', how='left')
                         
             # 컬럼명 변경
             df.rename(columns={'소속': '출고자소속'}, inplace=True)
@@ -296,7 +824,7 @@ if df1 is not None or df3 is not None:
     if df1 is not None:
         try:
             # 날짜 변환 - 오류 수정
-            date_columns = ['접수일자', '정비일자', '최근정비일자']
+            date_columns = ['정비일자', '최근정비일자']
             for col in date_columns:
                 if col in df1.columns:
                     try:
@@ -309,11 +837,6 @@ if df1 is not None or df3 is not None:
                             df1[col] = pd.to_datetime(df1[col], origin='1899-12-30', unit='D', errors='coerce')
                         except Exception as e2:
                             st.warning(f"{col} Excel 날짜 변환도 실패: {e2}")
-            
-            # 처리일수에서 이상치인 -1 값 삭제
-            if '정비일자' in df1.columns and '접수일자' in df1.columns:
-                df1['AS처리일수'] = (df1['정비일자'] - df1['접수일자']).dt.days
-                df1 = df1[df1['AS처리일수'] >= 0]  # 음수 제거
             
             # 재정비 간격 계산 (정비일자 - 최근정비일자)
             if '최근정비일자' in df1.columns and '정비일자' in df1.columns:
@@ -1677,473 +2200,6 @@ if df1 is not None or df3 is not None:
             2. 필요한 컬럼(브랜드, 모델명, 작업유형, 정비대상, 정비작업, AS처리일수)이 모두 있는지 확인
             3. 재정비 간격 정보가 있는지 확인
             """)
-
-# 정비일지 대시보드 표시 함수
-def display_maintenance_dashboard(df, category_name):
-    # 지표 카드용 컬럼 생성
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        total_cases = len(df)
-        st.metric(f"{category_name} AS 건수", f"{total_cases:,}")
-    
-    with col2:
-        if 'AS처리일수' in df.columns:
-            avg_days = df['AS처리일수'].mean()
-            st.metric("평균 처리일수", f"{avg_days:.2f}일")
-        else:
-            st.metric("평균 처리일수", "데이터 없음")
-    
-    with col3:
-        if 'AS처리일수' in df.columns:
-            within_3_days = (df['AS처리일수'] <= 2).mean() * 100
-            st.metric("2일 이내 처리율", f"{within_3_days:.1f}%")
-        else:
-            st.metric("2일 이내 처리율", "데이터 없음")
-    
-    with col4:
-        if '접수일자' in df.columns:
-            last_month = df['접수일자'].max().strftime('%Y-%m')
-            last_month_count = df[df['접수일자'].dt.strftime('%Y-%m') == last_month].shape[0]
-            st.metric("최근 월 AS 건수", f"{last_month_count:,}")
-        else:
-            st.metric("최근 월 AS 건수", "데이터 없음")
-            
-    st.markdown("---")
-    
-    # 1. 월별 AS건수 + 월별 평균 AS 처리일수 + AS 처리 일수 분포
-    col1, col2, col3 = st.columns(3)
-        
-    with col1:
-        # 월별 AS 건수
-        st.subheader("월별 AS 건수")
-        if '접수일자' in df.columns:
-            df_time = df.copy()
-            df_time['월'] = df_time['접수일자'].dt.to_period('M')
-            monthly_counts = df_time.groupby('월').size().reset_index(name='건수')
-            monthly_counts['월'] = monthly_counts['월'].astype(str)
-            
-            # 고해상도 그래프를 위한 설정
-            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
-            sns.barplot(x='월', y='건수', data=monthly_counts, ax=ax, palette='Blues')
-            
-            # 막대 위에 텍스트 표시
-            for i, v in enumerate(monthly_counts['건수']):
-                ax.text(i, v + max(monthly_counts['건수']) * 0.01, str(v), ha='center')
-            
-            plt.xticks(rotation=45)
-            ax.set_ylabel('건수')
-            plt.tight_layout()  # 여백 자동 조정
-            
-            # 고품질 표시 옵션 추가
-            st.pyplot(fig, use_container_width=True)
-            
-            # 다운로드 링크 추가
-            st.markdown(get_image_download_link(fig, f'{category_name}_월별_AS_건수.png', '월별 AS 건수 다운로드'), unsafe_allow_html=True)
-            
-    with col2:
-        if 'AS처리일수' in df.columns:
-            st.subheader("평균 AS 처리일수")
-            df['월'] = df['접수일자'].dt.to_period('M').astype(str)
-            monthly_avg = df.groupby('월')['AS처리일수'].mean().reset_index()
-            
-            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
-            sns.barplot(data=monthly_avg, x='월', y='AS처리일수', ax=ax, palette="Blues")
-            
-            # 평균값 텍스트 표시
-            for index, row in monthly_avg.iterrows():
-                ax.text(index, row['AS처리일수'] + 0.02, f"{row['AS처리일수']:.1f}일", ha='center')
-            
-            plt.xticks(rotation=45)
-            plt.tight_layout()
-            
-            st.pyplot(fig, use_container_width=True)
-            
-            # 다운로드 링크 추가
-            st.markdown(get_image_download_link(fig, f'{category_name}_월별_평균_처리일수.png', '월별 평균 처리일수 다운로드'), unsafe_allow_html=True)
-        
-    with col3:
-        if 'AS처리일수' in df.columns:
-            st.subheader("AS 처리 일수 분포")
-
-            days_counts = df['AS처리일수'].value_counts().sort_index()
-            days_counts = days_counts[days_counts.index <= 10]  # 10일 이하만 표시
-
-            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
-            sns.barplot(x=days_counts.index.astype(int), y=days_counts.values, ax=ax, palette="Blues")
-
-            # 막대 위에 텍스트 표시
-            for i, v in enumerate(days_counts.values):
-                ax.text(i, v + max(days_counts.values) * 0.02, str(v),
-                        ha='center', fontsize=12)
-
-            plt.tight_layout()
-            st.pyplot(fig, use_container_width=True)
-
-            st.markdown(get_image_download_link(fig, f'{category_name}_AS_처리일수_분포.png', 'AS 처리일수 분포 다운로드'), unsafe_allow_html=True)
-            
-    st.markdown("---")
-    
-    # 2. 30일 내 재정비율 + 2일 이내 처리율 + 지역별 AS 건수
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        # 30일 내 재정비율 추가
-        st.subheader("재정비율")
-        
-        # 유효한 데이터만 사용
-        valid_repair = df.dropna(subset=['정비일자', '최근정비일자']).copy()
-        valid_repair = valid_repair[valid_repair['재정비간격'] > 0]  # 정비간격이 0보다 큰 경우만
-        
-        if len(valid_repair) > 0:
-            # 30일 내 재정비 여부에 따른 건수 계산
-            within_30_days = valid_repair['30일내재정비'].sum()
-            over_30_days = len(valid_repair) - within_30_days
-            
-            labels = ['30일 이내 재정비', '30일 초과 재정비']
-            sizes = [within_30_days, over_30_days]
-            
-            # 파이 차트 그리기
-            fig, ax = create_figure_with_korean(figsize=(8, 8), dpi=300)
-            ax.pie(
-                sizes,
-                labels=labels,
-                autopct='%1.1f%%',
-                startangle=90,
-                colors=[sns.color_palette("Blues")[0], sns.color_palette("Blues")[2]],
-                textprops={'fontsize': 14}
-            )
-            ax.axis('equal')
-            plt.tight_layout()
-            
-            st.pyplot(fig, use_container_width=True)
-            
-            # 다운로드 링크 추가
-            st.markdown(get_image_download_link(fig, f'{category_name}_30일내_재정비율.png', '30일 내 재정비율 다운로드'), unsafe_allow_html=True)
-        else:
-            st.warning("재정비 데이터가 부족합니다.")
-            
-    with col2:
-        if 'AS처리일수' in df.columns:
-            st.subheader("2일 이내 처리율")
-            
-            threshold_days = 2
-            within_threshold = df['AS처리일수'] <= threshold_days
-            counts = within_threshold.value_counts()
-            labels = [f'{threshold_days}일 이내 처리', f'{threshold_days}일 초과 처리']
-            sizes = [counts.get(True, 0), counts.get(False, 0)]
-            colors = [sns.color_palette("Blues")[0], sns.color_palette("Blues")[2]]
-            
-            # 파이 차트 그리기
-            fig, ax = create_figure_with_korean(figsize=(8, 8), dpi=300)
-            ax.pie(
-                sizes,
-                labels=labels,
-                autopct='%1.1f%%',
-                startangle=90,
-                colors=colors,
-                textprops={'fontsize': 14}
-            )
-            plt.tight_layout()
-            
-            st.pyplot(fig, use_container_width=True)
-            
-            # 다운로드 링크 추가
-            st.markdown(get_image_download_link(fig, f'{category_name}_2일이내_처리율.png', '2일 이내 처리율 다운로드'), unsafe_allow_html=True)
-    
-    with col3:
-        # 지역별 빈도 분석
-        st.subheader("지역별 AS 건수")
-        if '지역' in df.columns:
-            df_clean = df.dropna(subset=['지역']).copy()
-            
-            region_counts = df_clean['지역'].value_counts()
-            region_counts = region_counts.dropna()
-            
-            # 최소 빈도수 처리 및 상위 15개 표시
-            others_count = region_counts[region_counts < 3].sum()
-            region_counts = region_counts[region_counts >= 3]
-            if others_count > 0:
-                region_counts['기타'] = others_count
-            
-            region_counts = region_counts.sort_values(ascending=False).nlargest(20)
-            
-            # 시각화
-            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-            blue_palette = sns.color_palette("Blues", n_colors=len(region_counts))
-            
-            sns.barplot(x=region_counts.index, y=region_counts.values, ax=ax, palette=blue_palette)
-            
-            # 막대 위에 텍스트 표시
-            for i, v in enumerate(region_counts.values):
-                ax.text(i, v + max(region_counts.values) * 0.02, str(v),
-                       ha='center', fontsize=12)
-            
-            plt.tight_layout()
-            st.pyplot(fig, use_container_width=True)
-            
-            # 다운로드 링크 추가
-            st.markdown(get_image_download_link(fig, f'{category_name}_지역별_AS_현황.png', '지역별 AS 현황 다운로드'), unsafe_allow_html=True)
-        else:
-            st.warning("지역 정보가 없습니다.")
-    
-    # 정비자 소속별 분석 (조직도 데이터가 있는 경우)
-    if '정비자소속' in df.columns:
-        st.subheader("정비자 소속별 분석")
-                
-        col1, col2 = st.columns(2)
-                
-        with col1:
-            # 소속별 정비 건수
-            dept_counts = df['정비자소속'].value_counts().head(10)
-                        
-            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-            sns.barplot(x=dept_counts.values, y=dept_counts.index, ax=ax, palette="Blues_r")
-                        
-            # 막대 위에 텍스트 표시
-            for i, v in enumerate(dept_counts.values):
-                ax.text(v + 0.5, i, str(v), va='center')
-                        
-            ax.set_xlabel('정비 건수')
-            plt.tight_layout()
-                        
-            st.pyplot(fig, use_container_width=True)
-            st.markdown(get_image_download_link(fig, f'{category_name}_소속별_정비건수.png', '소속별 정비건수 다운로드'), unsafe_allow_html=True)
-                
-        with col2:
-            # 소속별 평균 처리일수
-            if 'AS처리일수' in df.columns:
-                dept_avg_days = df.groupby('정비자소속')['AS처리일수'].mean().sort_values(ascending=False).head(10)
-                                
-                fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                sns.barplot(x=dept_avg_days.values, y=dept_avg_days.index, ax=ax, palette="Blues_r")
-                                
-                # 막대 위에 텍스트 표시
-                for i, v in enumerate(dept_avg_days.values):
-                    ax.text(v + 0.1, i, f"{v:.1f}일", va='center')
-                                
-                ax.set_xlabel('평균 처리일수')
-                plt.tight_layout()
-                                
-                st.pyplot(fig, use_container_width=True)
-                st.markdown(get_image_download_link(fig, f'{category_name}_소속별_평균처리일수.png', '소속별 평균처리일수 다운로드'), unsafe_allow_html=True)
-            else:
-                st.warning("처리일수 데이터가 없습니다.")
-
-# 수리비 대시보드 표시 함수
-def display_repair_cost_dashboard(df):
-    if df is None:
-        st.warning("수리비 데이터가 없습니다.")
-        return
-    
-    # 기본 지표
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        total_cases = len(df)
-        st.metric("총 수리 건수", f"{total_cases:,}")
-    
-    with col2:
-        if '금액' in df.columns:
-            total_cost = df['금액'].sum()
-            st.metric("총 수리비용", f"{total_cost:,.0f}원")
-        else:
-            for col in df.columns:
-                if '금액' in col or '비용' in col:
-                    total_cost = df[col].sum()
-                    st.metric("총 수리비용", f"{total_cost:,.0f}원")
-                    break
-            else:
-                st.metric("총 수리비용", "데이터 없음")
-    
-    with col3:
-        if '출고일자' in df.columns:
-            last_month = df['출고일자'].max().strftime('%Y-%m')
-            last_month_count = df[df['출고일자'].dt.strftime('%Y-%m') == last_month].shape[0]
-            st.metric("최근 월 수리 건수", f"{last_month_count:,}")
-        else:
-            st.metric("최근 월 수리 건수", "데이터 없음")
-    
-    with col4:
-        if '출고자소속' in df.columns:
-            dept_counts = df['출고자소속'].value_counts()
-            top_dept = dept_counts.index[0] if not dept_counts.empty else "정보 없음"
-            top_dept_count = dept_counts.iloc[0] if not dept_counts.empty else 0
-            st.metric("최다 출고 소속", f"{top_dept} ({top_dept_count}건)")
-        else:
-            st.metric("최다 출고 소속", "데이터 없음")
-    
-    st.markdown("---")
-    
-    # 월별 수리 건수 및 비용
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.subheader("월별 수리 건수")
-        if '출고일자' in df.columns:
-            df_time = df.copy()
-            df_time['월'] = df_time['출고일자'].dt.to_period('M')
-            monthly_counts = df_time.groupby('월').size().reset_index(name='건수')
-            monthly_counts['월'] = monthly_counts['월'].astype(str)
-            
-            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
-            sns.barplot(x='월', y='건수', data=monthly_counts, ax=ax, palette='Purples')
-            
-            # 막대 위에 텍스트 표시
-            for i, v in enumerate(monthly_counts['건수']):
-                ax.text(i, v + max(monthly_counts['건수']) * 0.01, str(v), ha='center')
-            
-            plt.xticks(rotation=45)
-            ax.set_ylabel('건수')
-            plt.tight_layout()
-            
-            st.pyplot(fig, use_container_width=True)
-            st.markdown(get_image_download_link(fig, '월별_수리_건수.png', '월별 수리 건수 다운로드'), unsafe_allow_html=True)
-    
-    with col2:
-        st.subheader("월별 수리 비용")
-        if '출고일자' in df.columns and ('금액' in df.columns or any('금액' in col for col in df.columns)):
-            df_time = df.copy()
-            df_time['월'] = df_time['출고일자'].dt.to_period('M')
-            
-            # 금액 컬럼 찾기
-            cost_col = '금액' if '금액' in df.columns else next((col for col in df.columns if '금액' in col), None)
-            
-            if cost_col:
-                monthly_costs = df_time.groupby('월')[cost_col].sum().reset_index()
-                monthly_costs['월'] = monthly_costs['월'].astype(str)
-                
-                fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
-                sns.barplot(x='월', y=cost_col, data=monthly_costs, ax=ax, palette='Purples')
-                
-                # 막대 위에 텍스트 표시 (천 단위 구분)
-                for i, v in enumerate(monthly_costs[cost_col]):
-                    ax.text(i, v + max(monthly_costs[cost_col]) * 0.01, f"{v:,.0f}", ha='center', fontsize=8)
-                
-                plt.xticks(rotation=45)
-                ax.set_ylabel('비용 (원)')
-                plt.tight_layout()
-                
-                st.pyplot(fig, use_container_width=True)
-                st.markdown(get_image_download_link(fig, '월별_수리_비용.png', '월별 수리 비용 다운로드'), unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    # 소속별 수리 건수 및 비용
-    if '출고자소속' in df.columns:
-        st.subheader("소속별 수리 현황")
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # 소속별 수리 건수
-            dept_counts = df['출고자소속'].value_counts().head(10)
-            
-            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-            sns.barplot(x=dept_counts.values, y=dept_counts.index, ax=ax, palette="Purples_r")
-            
-            # 막대 위에 텍스트 표시
-            for i, v in enumerate(dept_counts.values):
-                ax.text(v + 0.5, i, str(v), va='center')
-            
-            ax.set_xlabel('수리 건수')
-            plt.tight_layout()
-            
-            st.pyplot(fig, use_container_width=True)
-            st.markdown(get_image_download_link(fig, '소속별_수리건수.png', '소속별 수리건수 다운로드'), unsafe_allow_html=True)
-        
-        with col2:
-            # 소속별 수리 비용
-            cost_col = '금액' if '금액' in df.columns else next((col for col in df.columns if '금액' in col), None)
-            
-            if cost_col:
-                dept_costs = df.groupby('출고자소속')[cost_col].sum().sort_values(ascending=False).head(10)
-                
-                fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                sns.barplot(x=dept_costs.values, y=dept_costs.index, ax=ax, palette="Purples_r")
-                
-                # 막대 위에 텍스트 표시 (천 단위 구분)
-                for i, v in enumerate(dept_costs.values):
-                    ax.text(v + max(dept_costs.values) * 0.01, i, f"{v:,.0f}", va='center', fontsize=8)
-                
-                ax.set_xlabel('수리 비용 (원)')
-                plt.tight_layout()
-                
-                st.pyplot(fig, use_container_width=True)
-                st.markdown(get_image_download_link(fig, '소속별_수리비용.png', '소속별 수리비용 다운로드'), unsafe_allow_html=True)
-    
-    # 소속별 인원 대비 수리 건수 (조직도 데이터가 있는 경우)
-    if '출고자소속' in df.columns and df4 is not None and '소속' in df4.columns:
-        st.subheader("소속별 인원 대비 수리 건수")
-        
-        # 소속별 인원 수 계산
-        dept_staff = df4.groupby('소속').size()
-        
-        # 소속별 수리 건수
-        repair_by_dept = df.groupby('출고자소속').size()
-        
-        # 공통 소속만 추출
-        common_depts = sorted(set(dept_staff.index) & set(repair_by_dept.index))
-        
-        if common_depts:
-            # 데이터 준비
-            dept_comparison = pd.DataFrame({
-                '소속': common_depts,
-                '인원수': [dept_staff.get(dept, 0) for dept in common_depts],
-                '수리건수': [repair_by_dept.get(dept, 0) for dept in common_depts]
-            })
-            
-            # 인원 대비 수리 건수 비율 계산
-            dept_comparison['인원당수리건수'] = (dept_comparison['수리건수'] / dept_comparison['인원수']).round(2)
-            dept_comparison = dept_comparison.sort_values('인원당수리건수', ascending=False).head(10)
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                # 소속별 인원 및 수리 건수 비교
-                fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                
-                x = np.arange(len(dept_comparison))
-                width = 0.4
-                
-                # 인원 수 (정규화)
-                max_staff = dept_comparison['인원수'].max()
-                max_repair = dept_comparison['수리건수'].max()
-                scale_factor = max_repair / max_staff if max_staff > 0 else 1
-                
-                ax.bar(x - width/2, dept_comparison['인원수'] * scale_factor, width, 
-                      label='인원수 (정규화)', color='#8ECAE6', alpha=0.7)
-                ax.bar(x + width/2, dept_comparison['수리건수'], width, 
-                      label='수리건수', color='#9370DB')
-                
-                # 축 설정
-                ax.set_xticks(x)
-                ax.set_xticklabels(dept_comparison['소속'], rotation=45, ha='right')
-                ax.legend()
-                
-                # 보조 y축 추가 (실제 인원수)
-                ax2 = ax.twinx()
-                ax2.set_ylim(0, max_staff * 1.1)
-                ax2.set_ylabel('실제 인원수')
-                
-                plt.tight_layout()
-                st.pyplot(fig, use_container_width=True)
-                st.markdown(get_image_download_link(fig, '소속별_인원수리건수_비교.png', '소속별 인원수리건수 비교 다운로드'), unsafe_allow_html=True)
-            
-            with col2:
-                # 인원당 수리 건수
-                fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                sns.barplot(x=dept_comparison['인원당수리건수'], y=dept_comparison['소속'], ax=ax, palette="Purples_r")
-                
-                # 막대 위에 텍스트 표시
-                for i, v in enumerate(dept_comparison['인원당수리건수']):
-                    ax.text(v + 0.1, i, f"{v:.2f}", va='center')
-                
-                ax.set_xlabel('인원당 수리 건수')
-                plt.tight_layout()
-                
-                st.pyplot(fig, use_container_width=True)
-                st.markdown(get_image_download_link(fig, '소속별_인원당수리건수.png', '소속별 인원당수리건수 다운로드'), unsafe_allow_html=True)
 
     else:
         st.header("산업장비 AS 대시보드")

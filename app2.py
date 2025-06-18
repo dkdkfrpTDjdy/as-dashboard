@@ -128,11 +128,26 @@ def merge_dataframes(df1, df2):
         # 중복 행 제거
         merged_df = merged_df.drop_duplicates()
         
+        # 제조사명을 브랜드로 매핑 (기존 브랜드 컬럼이 없거나 NaN인 경우에만)
+        if '제조사명' in merged_df.columns:
+            if '브랜드' not in merged_df.columns:
+                merged_df['브랜드'] = merged_df['제조사명']
+            else:
+                # 브랜드가 이미 있는 경우, NaN인 값만 제조사명으로 채움
+                merged_df['브랜드'] = merged_df['브랜드'].fillna(merged_df['제조사명'])
+            
+            # 최종적으로 NaN인 브랜드는 '기타'로 설정
+            merged_df['브랜드'] = merged_df['브랜드'].fillna('기타')
+        
         # 자재내역 컬럼 분할
         if '자재내역' in merged_df.columns:
             # 자재내역에서 추가 정보 추출 (공백으로 나누기)
             merged_df[['연료', '운전방식', '적재용량', '마스트']] = merged_df['자재내역'].str.split(' ', n=3, expand=True)
             st.sidebar.success(f"자재내역 분할 완료: 연료, 운전방식, 적재용량, 마스트 컬럼이 생성되었습니다.")
+        
+        # 브랜드_모델 컬럼 재생성 (병합 후)
+        if '브랜드' in merged_df.columns and '모델명' in merged_df.columns:
+            merged_df['브랜드_모델'] = merged_df['브랜드'].astype(str) + '_' + merged_df['모델명'].astype(str)
         
         return merged_df
     except Exception as e:
@@ -237,6 +252,33 @@ def load_data(file):
         
         # 컬럼명 정리 (줄바꿈 제거 및 공백 제거)
         df.columns = [str(col).strip().replace('\n', '') for col in df.columns]
+        
+        # 컬럼명 매핑 (정비일지 데이터인 경우)
+        try:
+            # 대분류, 중분류, 소분류가 있는 경우 작업유형, 정비대상, 정비작업으로 변환
+            if all(col in df.columns for col in ['대분류', '중분류', '소분류']):
+                df.rename(columns={
+                    '대분류': '작업유형',
+                    '중분류': '정비대상',
+                    '소분류': '정비작업'
+                }, inplace=True)
+            
+            # 브랜드 컬럼 처리 - 제조사명 컬럼이 있으면 그것을 사용, 없으면 '기타'로 채움
+            if '제조사명' in df.columns:
+                df['브랜드'] = df['제조사명'].fillna('기타')
+            else:
+                df['브랜드'] = '기타'
+                
+            # 고장유형 조합
+            if all(col in df.columns for col in ['작업유형', '정비대상', '정비작업']):
+                df['고장유형'] = df['작업유형'].astype(str) + '_' + df['정비대상'].astype(str) + '_' + df['정비작업'].astype(str)
+                
+            # 브랜드_모델 조합 (브랜드와 모델명이 있는 경우)
+            if '브랜드' in df.columns and '모델명' in df.columns:
+                df['브랜드_모델'] = df['브랜드'].astype(str) + '_' + df['모델명'].astype(str)
+            
+        except Exception as e:
+            st.warning(f"일부 데이터 전처리 중 오류가 발생했습니다: {e}")
         
         return df
     except Exception as e:

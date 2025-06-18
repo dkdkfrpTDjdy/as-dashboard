@@ -69,6 +69,7 @@ if font_path and os.path.exists(font_path):
     fm.fontManager.addfont(font_path)
 
 # 정비일지 대시보드 표시 함수
+# 정비일지 대시보드 표시 함수
 def display_maintenance_dashboard(df, category_name):
     # 지표 카드용 컬럼 생성
     col1, col2, col3, col4 = st.columns(4)
@@ -78,23 +79,44 @@ def display_maintenance_dashboard(df, category_name):
         st.metric(f"{category_name} AS 건수", f"{total_cases:,}")
     
     with col2:
-        if '가동시간' in df.columns:
-            avg_operation = df['가동시간'].mean()
+        # 가동시간 컬럼이 있는지 확인하고, 없으면 비슷한 이름의 컬럼 찾기
+        operation_col = None
+        for col in df.columns:
+            if '가동시간' in col:
+                operation_col = col
+                break
+                
+        if operation_col:
+            avg_operation = df[operation_col].mean()
             st.metric("평균 가동시간", f"{avg_operation:.2f}시간")
         else:
             st.metric("평균 가동시간", "데이터 없음")
     
     with col3:
-        if '수리시간' in df.columns:
-            avg_repair = df['수리시간'].mean()
+        # 수리시간 컬럼이 있는지 확인하고, 없으면 비슷한 이름의 컬럼 찾기
+        repair_col = None
+        for col in df.columns:
+            if '수리시간' in col:
+                repair_col = col
+                break
+                
+        if repair_col:
+            avg_repair = df[repair_col].mean()
             st.metric("평균 수리시간", f"{avg_repair:.2f}시간")
         else:
             st.metric("평균 수리시간", "데이터 없음")
     
     with col4:
-        if '정비일자' in df.columns:
-            last_month = df['정비일자'].max().strftime('%Y-%m')
-            last_month_count = df[df['정비일자'].dt.strftime('%Y-%m') == last_month].shape[0]
+        # 정비일자 컬럼이 있는지 확인하고, 없으면 비슷한 이름의 컬럼 찾기
+        date_col = None
+        for col in df.columns:
+            if '정비일자' in col:
+                date_col = col
+                break
+                
+        if date_col and not df[date_col].empty:
+            last_month = df[date_col].max().strftime('%Y-%m')
+            last_month_count = df[df[date_col].dt.strftime('%Y-%m') == last_month].shape[0]
             st.metric("최근 월 AS 건수", f"{last_month_count:,}")
         else:
             st.metric("최근 월 AS 건수", "데이터 없음")
@@ -191,7 +213,24 @@ def display_maintenance_dashboard(df, category_name):
         st.subheader("장비 가동률")
         
         # 유효한 데이터만 사용
-        valid_operation = df.dropna(subset=['가동시간', '수리시간']).copy()
+        valid_operation = df.copy()
+        
+        # 필요한 컬럼 찾기
+        operation_col = None
+        repair_col = None
+        
+        for col in df.columns:
+            if '가동시간' in col:
+                operation_col = col
+            if '수리시간' in col:
+                repair_col = col
+        
+        # 두 컬럼이 모두 있는 경우에만 가동률 분석 수행
+        if operation_col and repair_col:
+            valid_operation = valid_operation.dropna(subset=[operation_col, repair_col])
+            # 이후 코드에서도 'operation_col'과 'repair_col' 변수를 사용
+        else:
+            st.warning("가동시간 또는 수리시간 컬럼을 찾을 수 없습니다.")
         
         if len(valid_operation) > 0:
             # 가동률 = 가동시간 / (가동시간 + 수리시간)
@@ -624,11 +663,14 @@ color_themes = {
 # 사이드바 설정
 st.sidebar.title("데이터 업로드 및 메뉴 클릭")
 
-# 데이터 로드 함수 (한 번만 정의)
 @st.cache_data
 def load_data(file):
     try:
         df = pd.read_excel(file)
+        
+        # 컬럼명 정리 (줄바꿈 제거 및 공백 제거)
+        df.columns = [str(col).strip().replace('\n', '') for col in df.columns]
+        
         return df
     except Exception as e:
         st.error(f"파일 로드 오류: {e}")
@@ -720,7 +762,8 @@ def merge_dataframes(df1, df2):
         # 자재내역 컬럼 분할
         if '자재내역' in merged_df.columns:
             # 자재내역에서 추가 정보 추출 (공백으로 나누기)
-            merged_df[['연료', '운전방식', '적재용량', '마스트형']] = merged_df['자재내역'].str.split(' ', n=3, expand=True)
+            merged_df[['연료', '운전방식', '적재용량', '마스트']] = merged_df['자재내역'].str.split(' ', n=3, expand=True)
+            st.sidebar.success(f"자재내역 분할 완료: 연료, 운전방식, 적재용량, 마스트 컬럼이 생성되었습니다.")
         
         return merged_df
     except Exception as e:
@@ -748,6 +791,10 @@ def map_employee_data(df, org_df):
     try:
         # 정비일지 데이터인 경우 (정비자번호 있음)
         if '정비자번호' in df.columns and '사번' in org_df.columns:
+            # 데이터 타입 변환 - 문자열로 통일
+            df['정비자번호'] = df['정비자번호'].astype(str)
+            org_df['사번'] = org_df['사번'].astype(str)
+            
             # 사번과 정비자번호 매핑
             df = pd.merge(df, org_df[['사번', '소속']],
                          left_on='정비자번호', right_on='사번', how='left')
@@ -763,6 +810,11 @@ def map_employee_data(df, org_df):
                     
         # 수리비 데이터인 경우 (출고자 있음)
         if '출고자' in df.columns and '사번' in org_df.columns:
+            # 출고자와 사번 데이터 타입 통일
+            if '정비자번호' in df.columns:
+                df['정비자번호'] = df['정비자번호'].astype(str)
+            org_df['사번'] = org_df['사번'].astype(str)
+            
             # 사번과 출고자 매핑
             df = pd.merge(df, org_df[['사번', '소속']],
                         left_on='정비자번호', right_on='사번', how='left')
@@ -865,39 +917,50 @@ if df1 is not None or df3 is not None:
     if menu == "정비일지 대시보드":
         st.title("정비일지 대시보드")
         
-        # 정비 구분에 따른 탭 생성
-        if '정비구분' in df1.columns:
-            tabs = st.tabs(["전체", "내부", "외부"])
+    # 메뉴별 콘텐츠 표시
+    if menu == "정비일지 대시보드":
+        st.title("정비일지 대시보드")
+        
+        # 정비구분 컬럼 확인 및 값 검증
+        if '정비구분' in df1.columns and df1['정비구분'].notna().any():
+            # 실제 존재하는 정비구분 값 확인
+            maintenance_types = df1['정비구분'].dropna().unique()
             
-            # 탭별 데이터 필터링
-            df_all = df1.copy()
-            df_internal = df1[df1['정비구분'] == '내부']
-            df_external = df1[df1['정비구분'] == '외부']
+            # 내부, 외부 값이 있는지 확인
+            has_internal = '내부' in maintenance_types
+            has_external = '외부' in maintenance_types
+            
+            # 탭 생성
+            tabs = st.tabs(["전체", "내부", "외부"])
             
             # 전체 탭
             with tabs[0]:
                 st.header("전체 정비 현황")
-                
-                # 데이터 분석 및 시각화 - 전체
-                display_maintenance_dashboard(df_all, "전체")
+                # 전체 데이터 표시
+                display_maintenance_dashboard(df1, "전체")
             
             # 내부 탭
             with tabs[1]:
                 st.header("내부 정비 현황")
-                
-                # 데이터 분석 및 시각화 - 내부
-                display_maintenance_dashboard(df_internal, "내부")
+                if has_internal:
+                    df_internal = df1[df1['정비구분'] == '내부']
+                    display_maintenance_dashboard(df_internal, "내부")
+                else:
+                    st.info("내부 정비 데이터가 없습니다.")
             
             # 외부 탭
             with tabs[2]:
                 st.header("외부 정비 현황")
-                
-                # 데이터 분석 및 시각화 - 외부
-                display_maintenance_dashboard(df_external, "외부")
+                if has_external:
+                    df_external = df1[df1['정비구분'] == '외부']
+                    display_maintenance_dashboard(df_external, "외부")
+                else:
+                    st.info("외부 정비 데이터가 없습니다.")
         else:
-            # 정비구분 컬럼이 없는 경우 전체 데이터로 표시
+            # 정비구분 컬럼이 없는 경우 전체 데이터만 표시
+            st.header("정비 현황")
             display_maintenance_dashboard(df1, "전체")
-    
+
     elif menu == "수리비 대시보드":
         st.title("수리비 대시보드")
         display_repair_cost_dashboard(df3)
@@ -1178,13 +1241,13 @@ if df1 is not None or df3 is not None:
 
             # 마스트별 분석
             with tabs[3]:
-                if '마스트형' in df1.columns:
+                if '마스트' in df1.columns:
                     col1, col2 = st.columns(2)
                     
                     with col1:
                         # 마스트별 AS 건수
                         st.subheader("마스트별 AS 건수")
-                        mast_type_counts = df1['마스트형'].value_counts().head(15)
+                        mast_type_counts = df1['마스트'].value_counts().head(15)
                         
                         if len(mast_type_counts) > 0:
                             fig, ax = create_figure_with_korean(figsize=(10, 9), dpi=300)
@@ -1208,11 +1271,11 @@ if df1 is not None or df3 is not None:
                         st.subheader("마스트별 고장유형")
                         
                         # 마스트 선택
-                        mast_types = ["전체"] + df1['마스트형'].value_counts().index.tolist()
+                        mast_types = ["전체"] + df1['마스트'].value_counts().index.tolist()
                         selected_mast = st.selectbox("마스트", mast_types)
                         
                         if selected_mast != "전체":
-                            filtered_df_mast = df1[df1['마스트형'] == selected_mast]
+                            filtered_df_mast = df1[df1['마스트'] == selected_mast]
                         else:
                             filtered_df_mast = df1
                             

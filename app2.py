@@ -219,22 +219,34 @@ def map_employee_data(df, org_df):
         
     try:
         # 정비일지 데이터인 경우 (정비자번호 있음)
-        if '정비자번호' in df.columns and '사번' in org_df.columns and '소속' in org_df.columns:
+        if '정비자번호' in df.columns and '사번' in org_df.columns:
             # 사번과 정비자번호 매핑
             df = pd.merge(df, org_df[['사번', '소속']],
-                          left_on='정비자번호', right_on='사번', how='left')
+                         left_on='정비자번호', right_on='사번', how='left')
                         
             # 컬럼명 변경
             df.rename(columns={'소속': '정비자소속'}, inplace=True)
+            
+            # 중복 컬럼 제거 (사번_y)
+            if '사번_y' in df.columns:
+                df = df.drop('사번_y', axis=1)
+            if '사번_x' in df.columns:
+                df = df.rename(columns={'사번_x': '사번'})
                     
         # 수리비 데이터인 경우 (출고자 있음)
-        if '출고자' in df.columns and '사번' in org_df.columns and '소속' in org_df.columns:
+        if '출고자' in df.columns and '사번' in org_df.columns:
             # 사번과 출고자 매핑
             df = pd.merge(df, org_df[['사번', '소속']],
-                          left_on='출고자', right_on='사번', how='left')
+                         left_on='출고자', right_on='사번', how='left')
                         
             # 컬럼명 변경
             df.rename(columns={'소속': '출고자소속'}, inplace=True)
+            
+            # 중복 컬럼 제거
+            if '사번_y' in df.columns:
+                df = df.drop('사번_y', axis=1)
+            if '사번_x' in df.columns:
+                df = df.rename(columns={'사번_x': '사번'})
                     
         return df
     except Exception as e:
@@ -283,60 +295,34 @@ if df1 is not None or df3 is not None:
     # 정비일지 데이터 전처리
     if df1 is not None:
         try:
-            # 날짜 변환 (에러 처리 추가)
-            if '접수일자' in df1.columns:
-                try:
-                    df1['접수일자'] = pd.to_datetime(df1['접수일자'], errors='coerce')
-                except Exception as e:
-                    st.warning(f"접수일자 변환 중 오류 발생: {e}")
-                    
-            if '정비일자' in df1.columns:
-                try:
-                    df1['정비일자'] = pd.to_datetime(df1['정비일자'], errors='coerce')
-                except Exception as e:
-                    st.warning(f"정비일자 변환 중 오류 발생: {e}")
-                    
-            if '최근정비일자' in df1.columns:
-                try:
-                    df1['최근정비일자'] = pd.to_datetime(df1['최근정비일자'], errors='coerce')
-                except Exception as e:
-                    st.warning(f"최근정비일자 변환 중 오류 발생: {e}")
+            # 날짜 변환 - 오류 수정
+            date_columns = ['접수일자', '정비일자', '최근정비일자']
+            for col in date_columns:
+                if col in df1.columns:
+                    try:
+                        # 기본 날짜 변환 시도
+                        df1[col] = pd.to_datetime(df1[col], errors='coerce')
+                    except Exception as e:  # 구체적인 예외 처리
+                        st.warning(f"{col} 기본 날짜 변환 실패: {e}")
+                        try:
+                            # Excel 날짜 숫자 처리 시도
+                            df1[col] = pd.to_datetime(df1[col], origin='1899-12-30', unit='D', errors='coerce')
+                        except Exception as e2:
+                            st.warning(f"{col} Excel 날짜 변환도 실패: {e2}")
             
-            # 처리일수 관련 코드는 날짜 변환이 정상적으로 이루어진 경우만 실행
-            if '접수일자' in df1.columns and '정비일자' in df1.columns:
-                if pd.api.types.is_datetime64_dtype(df1['접수일자']) and pd.api.types.is_datetime64_dtype(df1['정비일자']):
-                    df1['AS처리일수'] = (df1['정비일자'] - df1['접수일자']).dt.days
-                    df1 = df1[df1['AS처리일수'] >= 0]  # 음수 제거
+            # 처리일수에서 이상치인 -1 값 삭제
+            if '정비일자' in df1.columns and '접수일자' in df1.columns:
+                df1['AS처리일수'] = (df1['정비일자'] - df1['접수일자']).dt.days
+                df1 = df1[df1['AS처리일수'] >= 0]  # 음수 제거
             
-            # 재정비 간격도 날짜 변환이 정상적인 경우만 계산
-            if '정비일자' in df1.columns and '최근정비일자' in df1.columns:
-                if pd.api.types.is_datetime64_dtype(df1['정비일자']) and pd.api.types.is_datetime64_dtype(df1['최근정비일자']):
-                    df1['재정비간격'] = (df1['정비일자'] - df1['최근정비일자']).dt.days
-                    df1['30일내재정비'] = (df1['재정비간격'] <= 30) & (df1['재정비간격'] > 0)
-            
-            # 브랜드 컬럼 처리 - 제조사명 컬럼이 있으면 그것을 사용, 없으면 '기타'로 채움
-            if '제조사명' in df1.columns:
-                df1['브랜드'] = df1['제조사명'].fillna('기타')
-            else:
-                df1['브랜드'] = '기타'
-            
-            # 지역 추출 - 현장 컬럼에서 주소 부분 추출
-            if '현장' in df1.columns:
-                df1['지역'] = df1['현장'].apply(extract_region_from_address)
-
-            # 컬럼명 변경
-            df1.rename(columns={
-                '대분류': '작업유형',
-                '중분류': '정비대상',
-                '소분류': '정비작업'
-            }, inplace=True)
-            
-            # 고장유형 조합
-            if all(col in df1.columns for col in ['작업유형', '정비대상', '정비작업']):
-                df1['고장유형'] = df1['작업유형'].astype(str) + '_' + df1['정비대상'].astype(str) + '_' + df1['정비작업'].astype(str)
-                df1['브랜드_모델'] = df1['브랜드'].astype(str) + '_' + df1['모델명'].astype(str)
-        except Exception as e:
-            st.warning(f"정비일지 데이터 전처리 중 오류가 발생했습니다: {e}")
+            # 재정비 간격 계산 (정비일자 - 최근정비일자)
+            if '최근정비일자' in df1.columns and '정비일자' in df1.columns:
+                df1['재정비간격'] = (df1['정비일자'] - df1['최근정비일자']).dt.days
+                # 30일 내 재정비 여부
+                df1['30일내재정비'] = (df1['재정비간격'] <= 30) & (df1['재정비간격'] > 0)
+        
+        except Exception as main_error:
+            st.error(f"정비일지 데이터 전처리 중 오류 발생: {main_error}")
     
     # 수리비 데이터 전처리
     if df3 is not None:
@@ -2159,23 +2145,23 @@ def display_repair_cost_dashboard(df):
                 st.pyplot(fig, use_container_width=True)
                 st.markdown(get_image_download_link(fig, '소속별_인원당수리건수.png', '소속별 인원당수리건수 다운로드'), unsafe_allow_html=True)
 
-else:
-    st.header("산업장비 AS 대시보드")
-    st.info("좌측에 데이터 파일을 업로드해 주세요.")
-    
-    # 대시보드 설명 표시
-    st.markdown("""
-    ### 분석 메뉴
-    
-    1. **정비일지 대시보드**: 정비일지 데이터 기반의 AS 분석 (정비구분별 탭 제공)
-    2. **수리비 대시보드**: 수리비 데이터 기반의 비용 분석
-    3. **고장 유형 분석**: 고장 유형 분포 및 브랜드-모델별 고장 패턴 히트맵
-    4. **브랜드/모델 분석**: 브랜드 및 모델별 특성 분석
-    5. **정비내용 분석**: 정비내용 워드클라우드 및 분류별 정비내용 분석
-    6. **고장 예측**: 기계학습 모델을 활용한 재정비 기간 및 증상 예측
-    
-    ### 필요한 파일
-    
-    - **정비일지 데이터**: 장비 AS 정보
-    - **수리비 데이터**: 수리비용 정보
-    """)
+    else:
+        st.header("산업장비 AS 대시보드")
+        st.info("좌측에 데이터 파일을 업로드해 주세요.")
+        
+        # 대시보드 설명 표시
+        st.markdown("""
+        ### 분석 메뉴
+        
+        1. **정비일지 대시보드**: 정비일지 데이터 기반의 AS 분석 (정비구분별 탭 제공)
+        2. **수리비 대시보드**: 수리비 데이터 기반의 비용 분석
+        3. **고장 유형 분석**: 고장 유형 분포 및 브랜드-모델별 고장 패턴 히트맵
+        4. **브랜드/모델 분석**: 브랜드 및 모델별 특성 분석
+        5. **정비내용 분석**: 정비내용 워드클라우드 및 분류별 정비내용 분석
+        6. **고장 예측**: 기계학습 모델을 활용한 재정비 기간 및 증상 예측
+        
+        ### 필요한 파일
+        
+        - **정비일지 데이터**: 장비 AS 정보
+        - **수리비 데이터**: 수리비용 정보
+        """)

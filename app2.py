@@ -5,6 +5,22 @@ import matplotlib.font_manager as fm
 import matplotlib as mpl
 import urllib.request
 import platform
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import plotly.express as px
+import plotly.graph_objects as go
+import re
+from collections import Counter
+from wordcloud import WordCloud
+import io
+import base64
+import datetime
+from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+import requests
+import subprocess
 
 # 페이지 설정이 가장 먼저 와야 함
 st.set_page_config(
@@ -12,6 +28,7 @@ st.set_page_config(
     layout="wide"
 )
 
+# 한글 폰트 설정 함수
 def setup_korean_font_test():
     # 1. 프로젝트 내 포함된 폰트 우선 적용
     font_path = os.path.join("fonts", "NanumGothic.ttf")
@@ -41,34 +58,137 @@ def setup_korean_font_test():
     mpl.rcParams["axes.unicode_minus"] = False
     return None  # fallback일 경우 경로 반환 안 함
 
-import pandas as pd
-import numpy as np
-import seaborn as sns
-import plotly.express as px
-import plotly.graph_objects as go
-import os
-import re
-import matplotlib.font_manager as fm
-from collections import Counter
-from wordcloud import WordCloud
-import io
-import base64
-import datetime
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
-from sklearn.ensemble import RandomForestClassifier
-import matplotlib as mpl
-import requests
-import subprocess
+# 그래프 다운로드 기능 추가
+def get_image_download_link(fig, filename, text):
+    """그래프를 이미지로 변환하고 다운로드 링크 생성"""
+    buf = io.BytesIO()
+    fig.savefig(buf, format='png', dpi=300, bbox_inches='tight')
+    buf.seek(0)
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    href = f'<a href="data:image/png;base64,{b64}" download="{filename}"> {text}</a>'
+    return href
+  
+def create_figure_with_korean(figsize=(10, 6), dpi=300):
+    """한글 폰트가 적용된 그림 객체 생성""" 
+    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
+    return fig, ax
 
-# 폰트 설정 실행
-font_path = setup_korean_font_test()
-# 이후 코드에서 사용 가능
-if font_path and os.path.exists(font_path):
-    fm.fontManager.addfont(font_path)
+# 주소에서 지역 추출 함수
+def extract_region_from_address(address):
+    if not isinstance(address, str):
+        return None
+    
+    # 주소 형태인 경우만 처리 (시/도로 시작하는 경우)
+    if len(address) >= 2:
+        first_two = address[:2]
+        if first_two in ['서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종', 
+                         '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주']:
+            return first_two
+    return None
 
-# 정비일지 대시보드 표시 함수
+# 문자열 리스트로 변환하는 함수 (NaN과 혼합 유형 처리용)
+def convert_to_str_list(arr):
+    return [str(x) for x in arr if not pd.isna(x)]
+
+# 작은 비율 항목을 '기타'로 그룹화하는 함수
+def group_small_categories(series, threshold=0.03):
+    total = series.sum()
+    mask = series / total < threshold
+    if mask.any():
+        others = pd.Series({'기타': series[mask].sum()})
+        return pd.concat([series[~mask], others])
+    return series
+
+# 두 데이터프레임 병합 함수
+def merge_dataframes(df1, df2):
+    if df1 is None or df2 is None:
+        return None
+    
+    try:
+        # 관리번호 컬럼을 기준으로 두 데이터프레임 병합
+        # 필요한 컬럼만 선택하여 병합
+        df2_subset = df2[['관리번호', '제조사명', '제조년도', '취득가', '자재내역']]
+        
+        # 왼쪽 조인으로 병합 (AS 데이터는 모두 유지)
+        merged_df = pd.merge(df1, df2_subset, on='관리번호', how='left')
+        
+        # 중복 행 제거
+        merged_df = merged_df.drop_duplicates()
+        
+        # 자재내역 컬럼 분할
+        if '자재내역' in merged_df.columns:
+            # 자재내역에서 추가 정보 추출 (공백으로 나누기)
+            merged_df[['연료', '운전방식', '적재용량', '마스트']] = merged_df['자재내역'].str.split(' ', n=3, expand=True)
+            st.sidebar.success(f"자재내역 분할 완료: 연료, 운전방식, 적재용량, 마스트 컬럼이 생성되었습니다.")
+        
+        return merged_df
+    except Exception as e:
+        st.error(f"데이터 병합 중 오류 발생: {e}")
+        return df1  # 오류 발생시 원본 데이터프레임 반환
+
+# 최근 정비일자 계산 함수 (관리번호 기준)
+def calculate_previous_maintenance_dates(df):
+    if '관리번호' not in df.columns or '정비일자' not in df.columns:
+        return df
+    
+    # 정비일자 정렬 및 그룹화
+    df = df.sort_values(['관리번호', '정비일자'])
+    
+    # 각 관리번호별로 이전 정비일자 계산
+    df['최근정비일자'] = df.groupby('관리번호')['정비일자'].shift(1)
+    
+    return df
+
+# 조직도 데이터와 정비자번호/출고자 매핑 함수
+def map_employee_data(df, org_df):
+    if org_df is None or df is None:
+        return df
+        
+    try:
+        # 정비일지 데이터인 경우 (정비자번호 있음)
+        if '정비자번호' in df.columns and '사번' in org_df.columns:
+            # 데이터 타입 변환 - 문자열로 통일
+            df['정비자번호'] = df['정비자번호'].astype(str)
+            org_df['사번'] = org_df['사번'].astype(str)
+            
+            # 사번과 정비자번호 매핑
+            df = pd.merge(df, org_df[['사번', '소속']],
+                        left_on='정비자번호', right_on='사번', how='left')
+                        
+            # 컬럼명 변경
+            df.rename(columns={'소속': '정비자소속'}, inplace=True)
+            
+            # 중복 컬럼 제거 (사번_y)
+            if '사번_y' in df.columns:
+                df = df.drop('사번_y', axis=1)
+            if '사번_x' in df.columns:
+                df = df.rename(columns={'사번_x': '사번'})
+                    
+        # 수리비 데이터인 경우 (출고자 있음)
+        if '출고자' in df.columns and '사번' in org_df.columns:
+            # 출고자와 사번 데이터 타입 통일
+            if '정비자번호' in df.columns:
+                df['정비자번호'] = df['정비자번호'].astype(str)
+            org_df['사번'] = org_df['사번'].astype(str)
+            
+            # 사번과 출고자 매핑
+            df = pd.merge(df, org_df[['사번', '소속']],
+                        left_on='정비자번호', right_on='사번', how='left')
+                        
+            # 컬럼명 변경
+            df.rename(columns={'소속': '출고자소속'}, inplace=True)
+            
+            # 중복 컬럼 제거
+            if '사번_y' in df.columns:
+                df = df.drop('사번_y', axis=1)
+            if '사번_x' in df.columns:
+                df = df.rename(columns={'사번_x': '사번'})
+                    
+        return df
+    except Exception as e:
+        st.error(f"직원 데이터 매핑 중 오류 발생: {e}")
+        return df
+
 # 정비일지 대시보드 표시 함수
 def display_maintenance_dashboard(df, category_name):
     # 지표 카드용 컬럼 생성
@@ -634,21 +754,12 @@ def display_repair_cost_dashboard(df):
                 
                 st.pyplot(fig, use_container_width=True)
                 st.markdown(get_image_download_link(fig, '소속별_인원당수리건수.png', '소속별 인원당수리건수 다운로드'), unsafe_allow_html=True)
- 
-# 그래프 다운로드 기능 추가
-def get_image_download_link(fig, filename, text):
-    """그래프를 이미지로 변환하고 다운로드 링크 생성"""
-    buf = io.BytesIO()
-    fig.savefig(buf, format='png', dpi=300, bbox_inches='tight')
-    buf.seek(0)
-    b64 = base64.b64encode(buf.getvalue()).decode()
-    href = f'<a href="data:image/png;base64,{b64}" download="{filename}"> {text}</a>'
-    return href
-  
-def create_figure_with_korean(figsize=(10, 6), dpi=300):
-    """한글 폰트가 적용된 그림 객체 생성""" 
-    fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
-    return fig, ax
+
+# 폰트 설정 실행
+font_path = setup_korean_font_test()
+# 이후 코드에서 사용 가능
+if font_path and os.path.exists(font_path):
+    fm.fontManager.addfont(font_path)
 
 # 메뉴별 색상 테마 설정
 color_themes = {
@@ -716,122 +827,6 @@ try:
 except Exception as e:
     st.sidebar.warning(f"조직도 데이터를 로드할 수 없습니다: {e}")
     df4 = None
-
-# 주소에서 지역 추출 함수
-def extract_region_from_address(address):
-    if not isinstance(address, str):
-        return None
-    
-    # 주소 형태인 경우만 처리 (시/도로 시작하는 경우)
-    if len(address) >= 2:
-        first_two = address[:2]
-        if first_two in ['서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종', 
-                         '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주']:
-            return first_two
-    return None
-
-# 문자열 리스트로 변환하는 함수 (NaN과 혼합 유형 처리용)
-def convert_to_str_list(arr):
-    return [str(x) for x in arr if not pd.isna(x)]
-
-# 작은 비율 항목을 '기타'로 그룹화하는 함수
-def group_small_categories(series, threshold=0.03):
-    total = series.sum()
-    mask = series / total < threshold
-    if mask.any():
-        others = pd.Series({'기타': series[mask].sum()})
-        return pd.concat([series[~mask], others])
-    return series
-
-# 두 데이터프레임 병합 함수
-def merge_dataframes(df1, df2):
-    if df1 is None or df2 is None:
-        return None
-    
-    try:
-        # 관리번호 컬럼을 기준으로 두 데이터프레임 병합
-        # 필요한 컬럼만 선택하여 병합
-        df2_subset = df2[['관리번호', '제조사명', '제조년도', '취득가', '자재내역']]
-        
-        # 왼쪽 조인으로 병합 (AS 데이터는 모두 유지)
-        merged_df = pd.merge(df1, df2_subset, on='관리번호', how='left')
-        
-        # 중복 행 제거
-        merged_df = merged_df.drop_duplicates()
-        
-        # 자재내역 컬럼 분할
-        if '자재내역' in merged_df.columns:
-            # 자재내역에서 추가 정보 추출 (공백으로 나누기)
-            merged_df[['연료', '운전방식', '적재용량', '마스트']] = merged_df['자재내역'].str.split(' ', n=3, expand=True)
-            st.sidebar.success(f"자재내역 분할 완료: 연료, 운전방식, 적재용량, 마스트 컬럼이 생성되었습니다.")
-        
-        return merged_df
-    except Exception as e:
-        st.error(f"데이터 병합 중 오류 발생: {e}")
-        return df1  # 오류 발생시 원본 데이터프레임 반환
-
-# 최근 정비일자 계산 함수 (관리번호 기준)
-def calculate_previous_maintenance_dates(df):
-    if '관리번호' not in df.columns or '정비일자' not in df.columns:
-        return df
-    
-    # 정비일자 정렬 및 그룹화
-    df = df.sort_values(['관리번호', '정비일자'])
-    
-    # 각 관리번호별로 이전 정비일자 계산
-    df['최근정비일자'] = df.groupby('관리번호')['정비일자'].shift(1)
-    
-    return df
-
-# 조직도 데이터와 정비자번호/출고자 매핑 함수
-def map_employee_data(df, org_df):
-    if org_df is None or df is None:
-        return df
-        
-    try:
-        # 정비일지 데이터인 경우 (정비자번호 있음)
-        if '정비자번호' in df.columns and '사번' in org_df.columns:
-            # 데이터 타입 변환 - 문자열로 통일
-            df['정비자번호'] = df['정비자번호'].astype(str)
-            org_df['사번'] = org_df['사번'].astype(str)
-            
-            # 사번과 정비자번호 매핑
-            df = pd.merge(df, org_df[['사번', '소속']],
-                         left_on='정비자번호', right_on='사번', how='left')
-                        
-            # 컬럼명 변경
-            df.rename(columns={'소속': '정비자소속'}, inplace=True)
-            
-            # 중복 컬럼 제거 (사번_y)
-            if '사번_y' in df.columns:
-                df = df.drop('사번_y', axis=1)
-            if '사번_x' in df.columns:
-                df = df.rename(columns={'사번_x': '사번'})
-                    
-        # 수리비 데이터인 경우 (출고자 있음)
-        if '출고자' in df.columns and '사번' in org_df.columns:
-            # 출고자와 사번 데이터 타입 통일
-            if '정비자번호' in df.columns:
-                df['정비자번호'] = df['정비자번호'].astype(str)
-            org_df['사번'] = org_df['사번'].astype(str)
-            
-            # 사번과 출고자 매핑
-            df = pd.merge(df, org_df[['사번', '소속']],
-                        left_on='정비자번호', right_on='사번', how='left')
-                        
-            # 컬럼명 변경
-            df.rename(columns={'소속': '출고자소속'}, inplace=True)
-            
-            # 중복 컬럼 제거
-            if '사번_y' in df.columns:
-                df = df.drop('사번_y', axis=1)
-            if '사번_x' in df.columns:
-                df = df.rename(columns={'사번_x': '사번'})
-                    
-        return df
-    except Exception as e:
-        st.error(f"직원 데이터 매핑 중 오류 발생: {e}")
-        return df
 
 # 데이터 병합 및 전처리
 if df1 is not None:
@@ -913,10 +908,6 @@ if df1 is not None or df3 is not None:
         except Exception as e:
             st.warning(f"수리비 데이터 전처리 중 오류가 발생했습니다: {e}")
     
-    # 메뉴별 콘텐츠 표시
-    if menu == "정비일지 대시보드":
-        st.title("정비일지 대시보드")
-        
     # 메뉴별 콘텐츠 표시
     if menu == "정비일지 대시보드":
         st.title("정비일지 대시보드")
@@ -2116,7 +2107,7 @@ if df1 is not None or df3 is not None:
                 id_placeholder = f"예: {existing_ids[0]}" if len(existing_ids) > 0 else ""
                 input_id = st.text_input("관리번호(직접 입력)", placeholder=id_placeholder).strip()
                 # 선택된 ID 또는 입력된 ID 사용
-                final_id = selected_id if selected_id else input_id
+                final_id = selected_id if selected_id != "전체" else input_id
     
             with col5:
                 if '제조년도' in filtered_df.columns:
@@ -2135,7 +2126,6 @@ if df1 is not None or df3 is not None:
                 else:
                     selected_year_range = "전체"
 
-
             # 브랜드 + 모델 기준 1차 필터링
             filtered_df = df1[(df1['브랜드'] == selected_brand) & (df1['모델명'] == selected_model)]
 
@@ -2144,7 +2134,7 @@ if df1 is not None or df3 is not None:
                 filtered_df = filtered_df[filtered_df['관리번호'] == selected_id]
 
             # 제조년도 범위로 필터링 (정의된 구간 내 값만)
-            if selected_year_range != "전체":
+            if selected_year_range != "전체" and '제조년도' in filtered_df.columns:
                 def year_in_range(year):
                     if selected_year_range == "2005년 이하": return year <= 2005
                     elif selected_year_range == "2006-2010": return 2006 <= year <= 2010
@@ -2169,7 +2159,12 @@ if df1 is not None or df3 is not None:
                     st.write(f"**정비사:** {latest_record.get('정비자', '정보 없음')}")
 
                 with col2:
-                    st.write(f"**이전 정비일:** {latest_record.get('최근정비일자', '정보 없음')}")
+                    if '최근정비일자' in latest_record and not pd.isna(latest_record['최근정비일자']):
+                        prev_date = latest_record['최근정비일자'].strftime('%Y-%m-%d')
+                    else:
+                        prev_date = "정보 없음"
+                        
+                    st.write(f"**이전 정비일:** {prev_date}")
                     st.write(f"**정비 내용:** {latest_record.get('정비내용', '정보 없음')}")
                     st.write(f"**현장명:** {latest_record.get('현장', '정보 없음')}")
         
@@ -2264,23 +2259,23 @@ if df1 is not None or df3 is not None:
             3. 재정비 간격 정보가 있는지 확인
             """)
 
-    else:
-        st.header("산업장비 AS 대시보드")
-        st.info("좌측에 데이터 파일을 업로드해 주세요.")
-        
-        # 대시보드 설명 표시
-        st.markdown("""
-        ### 분석 메뉴
-        
-        1. **정비일지 대시보드**: 정비일지 데이터 기반의 AS 분석 (정비구분별 탭 제공)
-        2. **수리비 대시보드**: 수리비 데이터 기반의 비용 분석
-        3. **고장 유형 분석**: 고장 유형 분포 및 브랜드-모델별 고장 패턴 히트맵
-        4. **브랜드/모델 분석**: 브랜드 및 모델별 특성 분석
-        5. **정비내용 분석**: 정비내용 워드클라우드 및 분류별 정비내용 분석
-        6. **고장 예측**: 기계학습 모델을 활용한 재정비 기간 및 증상 예측
-        
-        ### 필요한 파일
-        
-        - **정비일지 데이터**: 장비 AS 정보
-        - **수리비 데이터**: 수리비용 정보
-        """)
+else:
+    st.header("산업장비 AS 대시보드")
+    st.info("좌측에 데이터 파일을 업로드해 주세요.")
+    
+    # 대시보드 설명 표시
+    st.markdown("""
+    ### 분석 메뉴
+    
+    1. **정비일지 대시보드**: 정비일지 데이터 기반의 AS 분석 (정비구분별 탭 제공)
+    2. **수리비 대시보드**: 수리비 데이터 기반의 비용 분석
+    3. **고장 유형 분석**: 고장 유형 분포 및 브랜드-모델별 고장 패턴 히트맵
+    4. **브랜드/모델 분석**: 브랜드 및 모델별 특성 분석
+    5. **정비내용 분석**: 정비내용 워드클라우드 및 분류별 정비내용 분석
+    6. **고장 예측**: 기계학습 모델을 활용한 재정비 기간 및 증상 예측
+    
+    ### 필요한 파일
+    
+    - **정비일지 데이터**: 장비 AS 정보
+    - **수리비 데이터**: 수리비용 정보
+    """)

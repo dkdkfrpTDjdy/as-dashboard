@@ -1820,204 +1820,239 @@ if df1 is not None or df3 is not None:
     elif menu == "정비내용 분석":
         st.title("정비내용 분석")
         
-    # 정비내용 분석 함수 추가
-    def display_maintenance_text_analysis(df, maintenance_type=None):
-        # 데이터 필터링 (정비구분에 따라)
-        if maintenance_type and maintenance_type != "전체":
-            filtered_df = df[df['정비구분'] == maintenance_type]
-            title_prefix = f"{maintenance_type} "
-        else:
-            filtered_df = df
-            title_prefix = ""
-    
-        # 텍스트 데이터 확인
-        if '정비내용' in filtered_df.columns:
-            # 정비내용 데이터 준비
-            from kiwipiepy import Kiwi
-            kiwi = Kiwi()
-
-            text_data_raw = ' '.join(filtered_df['정비내용'].dropna().astype(str))
-
-            # 형태소 분석 + 명사 추출
-            tokens = kiwi.tokenize(text_data_raw)
-            nouns = [token.form for token in tokens if token.tag.startswith('N')]
-
-            stopwords = ["및", "있음", "없음", "함", "을", "후", "함", "접수", "취소", "확인", "위해", "통해", "오류", "완료", "작업", "실시", "진행", "수리", '정상작동', '정상작동확인', '조치완료']
-
-            # 불용어 제거
-            filtered_nouns = [word for word in nouns if word not in stopwords and len(word) > 1]
-
-            # 워드클라우드용 문자열 생성
-            text_data = ' '.join(filtered_nouns)
-            
-            if not text_data:
-                st.warning(f"{title_prefix}정비내용 데이터가 없습니다.")
+        # 정비내용 분석 함수 정의
+        def display_maintenance_text_analysis(df, maintenance_type=None):
+            # 데이터 필터링 (정비구분에 따라)
+            if maintenance_type and maintenance_type != "전체":
+                filtered_df = df[df['정비구분'] == maintenance_type]
+                title_prefix = f"{maintenance_type} "
             else:
-                # 그래프 행 1: 전체 워드클라우드와 분류별 워드클라우드
-                col1, col2 = st.columns(2)
+                filtered_df = df
+                title_prefix = ""
+        
+            # 텍스트 데이터 확인
+            if '정비내용' in filtered_df.columns:
+                # 정비내용 데이터 준비
+                from kiwipiepy import Kiwi
+                kiwi = Kiwi()
+
+                text_data_raw = ' '.join(filtered_df['정비내용'].dropna().astype(str))
+
+                # 형태소 분석 + 명사 추출
+                tokens = kiwi.tokenize(text_data_raw)
+                nouns = [token.form for token in tokens if token.tag.startswith('N')]
+
+                stopwords = ["및", "있음", "없음", "함", "을", "후", "함", "접수", "취소", "확인", "위해", "통해", "오류", "완료", "작업", "실시", "진행", "수리", '정상작동', '정상작동확인', '조치완료']
+
+                # 불용어 제거
+                filtered_nouns = [word for word in nouns if word not in stopwords and len(word) > 1]
+
+                # 워드클라우드용 문자열 생성
+                text_data = ' '.join(filtered_nouns)
                 
-                with col1:
-                    st.subheader(f"{title_prefix}정비내용 워드클라우드")
-                    
-                    try:
-                        # 워드클라우드 생성 (font_path 사용하지 않음)
-                        wordcloud = WordCloud(
-                            width=1200, 
-                            height=800,
-                            background_color='white',
-                            font_path=font_path,  
-                            colormap=current_theme,
-                            max_words=100,
-                            stopwords=set(stopwords),
-                            min_font_size=10,
-                            max_font_size=150,
-                            random_state=42
-                        ).generate(text_data)
-                        
-                        # 워드클라우드 시각화
-                        fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
-                        ax.imshow(wordcloud, interpolation='bilinear')
-                        ax.axis('off')
-                        plt.tight_layout()
-                        
-                        st.pyplot(fig, use_container_width=True)
-                        
-                        # 다운로드 링크 추가
-                        st.markdown(get_image_download_link(fig, f'{title_prefix}정비내용_워드클라우드.png', '정비내용 워드클라우드 다운로드'), unsafe_allow_html=True)
-                    except Exception as e:
-                        st.error(f"워드클라우드 생성 중 오류가 발생했습니다: {e}")
-                        if "font_path" in str(e).lower():
-                            st.info("한글 폰트 경로를 확인해주세요.")
-                
-                with col2:
-                    # 주요 단어 표시
-                    word_freq = wordcloud.words_
-                    top_words = dict(sorted(word_freq.items(), key=lambda x: x[1], reverse=True)[:30])
-                    
-                    st.subheader(f"{title_prefix}주요 단어 Top 30")
-                    word_df = pd.DataFrame({
-                        '단어': list(top_words.keys()),
-                        '가중치': list(top_words.values())
-                    })
-                    
-                    fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                    sns.barplot(x=word_df['가중치'].head(20), y=word_df['단어'].head(20), ax=ax, palette=f"{current_theme}_r")
-                    plt.tight_layout()
-                    
-                    st.pyplot(fig, use_container_width=True)
-                    
-                    # 다운로드 링크 추가
-                    st.markdown(get_image_download_link(fig, f'{title_prefix}주요단어_TOP30.png', '주요단어 TOP30 다운로드'), unsafe_allow_html=True)
-                
-                # 분류별 정비내용 워드클라우드
-                st.subheader(f"{title_prefix}분류별 정비내용 워드클라우드")
-                
-                if all(col in filtered_df.columns for col in ['작업유형', '정비대상', '정비작업', '정비내용']):
-                    col1, col2, col3 = st.columns(3)
+                if not text_data:
+                    st.warning(f"{title_prefix}정비내용 데이터가 없습니다.")
+                else:
+                    # 그래프 행 1: 전체 워드클라우드와 분류별 워드클라우드
+                    col1, col2 = st.columns(2)
                     
                     with col1:
-                        # 문자열 변환으로 정렬 오류 방지
-                        categories = ["전체"] + sorted(convert_to_str_list(filtered_df['작업유형'].dropna().unique()))
-                        selected_category = st.selectbox("작업유형", categories, key=f"text_cat_{maintenance_type}")
-                    
-                    # 선택된 작업유형에 따라 데이터 필터링
-                    if selected_category != "전체":
-                        text_filtered_df = filtered_df[filtered_df['작업유형'].astype(str) == selected_category]
+                        st.subheader(f"{title_prefix}정비내용 워드클라우드")
                         
-                        with col2:
-                            subcategories = ["전체"] + sorted(convert_to_str_list(text_filtered_df['정비대상'].dropna().unique()))
-                            selected_subcategory = st.selectbox("정비대상", subcategories, key=f"text_subcat_{maintenance_type}")
-                        
-                        # 선택된 정비대상에 따라 추가 필터링
-                        if selected_subcategory != "전체":
-                            text_filtered_df = text_filtered_df[text_filtered_df['정비대상'].astype(str) == selected_subcategory]
+                        try:
+                            # 워드클라우드 생성 (font_path 사용하지 않음)
+                            wordcloud = WordCloud(
+                                width=1200, 
+                                height=800,
+                                background_color='white',
+                                font_path=font_path,  
+                                colormap=current_theme,
+                                max_words=100,
+                                stopwords=set(stopwords),
+                                min_font_size=10,
+                                max_font_size=150,
+                                random_state=42
+                            ).generate(text_data)
                             
-                            with col3:
-                                detailed_categories = ["전체"] + sorted(convert_to_str_list(text_filtered_df['정비작업'].dropna().unique()))
-                                selected_detailed = st.selectbox("정비작업", detailed_categories, key=f"text_detail_{maintenance_type}")
-                            
-                            # 선택된 정비작업에 따라 최종 필터링
-                            if selected_detailed != "전체":
-                                text_filtered_df = text_filtered_df[text_filtered_df['정비작업'].astype(str) == selected_detailed]
-                        else:
-                            selected_detailed = "전체"
-                            with col3:
-                                st.selectbox("정비작업", ["전체"], key=f"text_detail_empty_{maintenance_type}")
-                    else:
-                        text_filtered_df = filtered_df
-                        selected_subcategory = "전체"
-                        selected_detailed = "전체"
-                        
-                        with col2:
-                            st.selectbox("정비대상", ["전체"], key=f"text_subcat_empty_{maintenance_type}")
-                        
-                        with col3:
-                            st.selectbox("정비작업", ["전체"], key=f"text_detail_empty2_{maintenance_type}")
-                    
-                    # 필터링된 정비내용 결합
-                    filtered_text = ' '.join(text_filtered_df['정비내용'].dropna().astype(str))
-                    
-                    if not filtered_text:
-                        st.warning(f"선택한 분류에 대한 {title_prefix}정비내용 데이터가 없습니다.")
-                    else:
-                        st.write(f"선택: {selected_category} > {selected_subcategory} > {selected_detailed}")
-                        st.write(f"선택된 AS 건수: {len(text_filtered_df)}")
-                        
-                        col1, col2 = st.columns(2)
-                        
-                        with col1:
-                            try:
-                                # 워드클라우드 생성 (font_path 사용하지 않음)
-                                wordcloud = WordCloud(
-                                    width=1200, 
-                                    height=800,
-                                    background_color='white',
-                                    font_path=font_path,
-                                    colormap=current_theme,
-                                    max_words=100,
-                                    stopwords=set(stopwords),
-                                    min_font_size=10,
-                                    max_font_size=150,
-                                    random_state=42
-                                ).generate(filtered_text)
-                                
-                                # 워드클라우드 시각화
-                                fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
-                                ax.imshow(wordcloud, interpolation='bilinear')
-                                ax.axis('off')
-                                plt.tight_layout()
-                                
-                                st.pyplot(fig, use_container_width=True)
-                                
-                                # 다운로드 링크 추가
-                                st.markdown(get_image_download_link(fig, f'{title_prefix}{selected_category}_{selected_subcategory}_{selected_detailed}_워드클라우드.png', 
-                                        '분류별 워드클라우드 다운로드'), unsafe_allow_html=True)
-                            except Exception as e:
-                                st.error(f"워드클라우드 생성 중 오류가 발생했습니다: {e}")
-                        
-                        with col2:
-                            # 주요 단어 표시
-                            word_freq = wordcloud.words_
-                            top_words = dict(sorted(word_freq.items(), key=lambda x: x[1], reverse=True)[:30])
-                            
-                            word_df = pd.DataFrame({
-                                '단어': list(top_words.keys()),
-                                '가중치': list(top_words.values())
-                            })
-                            
-                            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                            sns.barplot(x=word_df['가중치'].head(20), y=word_df['단어'].head(20), ax=ax, palette=f"{current_theme}_r")
+                            # 워드클라우드 시각화
+                            fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
+                            ax.imshow(wordcloud, interpolation='bilinear')
+                            ax.axis('off')
                             plt.tight_layout()
                             
                             st.pyplot(fig, use_container_width=True)
                             
                             # 다운로드 링크 추가
-                            st.markdown(get_image_download_link(fig, f'{title_prefix}{selected_category}_{selected_subcategory}_{selected_detailed}_주요단어.png', 
-                                    '분류별 주요단어 다운로드'), unsafe_allow_html=True)
+                            st.markdown(get_image_download_link(fig, f'{title_prefix}정비내용_워드클라우드.png', '정비내용 워드클라우드 다운로드'), unsafe_allow_html=True)
+                        except Exception as e:
+                            st.error(f"워드클라우드 생성 중 오류가 발생했습니다: {e}")
+                            if "font_path" in str(e).lower():
+                                st.info("한글 폰트 경로를 확인해주세요.")
+                    
+                    with col2:
+                        # 주요 단어 표시
+                        word_freq = wordcloud.words_
+                        top_words = dict(sorted(word_freq.items(), key=lambda x: x[1], reverse=True)[:30])
+                        
+                        st.subheader(f"{title_prefix}주요 단어 Top 30")
+                        word_df = pd.DataFrame({
+                            '단어': list(top_words.keys()),
+                            '가중치': list(top_words.values())
+                        })
+                        
+                        fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+                        sns.barplot(x=word_df['가중치'].head(20), y=word_df['단어'].head(20), ax=ax, palette=f"{current_theme}_r")
+                        plt.tight_layout()
+                        
+                        st.pyplot(fig, use_container_width=True)
+                        
+                        # 다운로드 링크 추가
+                        st.markdown(get_image_download_link(fig, f'{title_prefix}주요단어_TOP30.png', '주요단어 TOP30 다운로드'), unsafe_allow_html=True)
+                    
+                    # 분류별 정비내용 워드클라우드
+                    st.subheader(f"{title_prefix}분류별 정비내용 워드클라우드")
+                    
+                    if all(col in filtered_df.columns for col in ['작업유형', '정비대상', '정비작업', '정비내용']):
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            # 문자열 변환으로 정렬 오류 방지
+                            categories = ["전체"] + sorted(convert_to_str_list(filtered_df['작업유형'].dropna().unique()))
+                            selected_category = st.selectbox("작업유형", categories, key=f"text_cat_{maintenance_type}")
+                        
+                        # 선택된 작업유형에 따라 데이터 필터링
+                        if selected_category != "전체":
+                            text_filtered_df = filtered_df[filtered_df['작업유형'].astype(str) == selected_category]
+                            
+                            with col2:
+                                subcategories = ["전체"] + sorted(convert_to_str_list(text_filtered_df['정비대상'].dropna().unique()))
+                                selected_subcategory = st.selectbox("정비대상", subcategories, key=f"text_subcat_{maintenance_type}")
+                            
+                            # 선택된 정비대상에 따라 추가 필터링
+                            if selected_subcategory != "전체":
+                                text_filtered_df = text_filtered_df[text_filtered_df['정비대상'].astype(str) == selected_subcategory]
+                                
+                                with col3:
+                                    detailed_categories = ["전체"] + sorted(convert_to_str_list(text_filtered_df['정비작업'].dropna().unique()))
+                                    selected_detailed = st.selectbox("정비작업", detailed_categories, key=f"text_detail_{maintenance_type}")
+                                
+                                # 선택된 정비작업에 따라 최종 필터링
+                                if selected_detailed != "전체":
+                                    text_filtered_df = text_filtered_df[text_filtered_df['정비작업'].astype(str) == selected_detailed]
+                            else:
+                                selected_detailed = "전체"
+                                with col3:
+                                    st.selectbox("정비작업", ["전체"], key=f"text_detail_empty_{maintenance_type}")
+                        else:
+                            text_filtered_df = filtered_df
+                            selected_subcategory = "전체"
+                            selected_detailed = "전체"
+                            
+                            with col2:
+                                st.selectbox("정비대상", ["전체"], key=f"text_subcat_empty_{maintenance_type}")
+                            
+                            with col3:
+                                st.selectbox("정비작업", ["전체"], key=f"text_detail_empty2_{maintenance_type}")
+                        
+                        # 필터링된 정비내용 결합
+                        filtered_text = ' '.join(text_filtered_df['정비내용'].dropna().astype(str))
+                        
+                        if not filtered_text:
+                            st.warning(f"선택한 분류에 대한 {title_prefix}정비내용 데이터가 없습니다.")
+                        else:
+                            st.write(f"선택: {selected_category} > {selected_subcategory} > {selected_detailed}")
+                            st.write(f"선택된 AS 건수: {len(text_filtered_df)}")
+                            
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                try:
+                                    # 워드클라우드 생성 (font_path 사용하지 않음)
+                                    wordcloud = WordCloud(
+                                        width=1200, 
+                                        height=800,
+                                        background_color='white',
+                                        font_path=font_path,
+                                        colormap=current_theme,
+                                        max_words=100,
+                                        stopwords=set(stopwords),
+                                        min_font_size=10,
+                                        max_font_size=150,
+                                        random_state=42
+                                    ).generate(filtered_text)
+                                    
+                                    # 워드클라우드 시각화
+                                    fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
+                                    ax.imshow(wordcloud, interpolation='bilinear')
+                                    ax.axis('off')
+                                    plt.tight_layout()
+                                    
+                                    st.pyplot(fig, use_container_width=True)
+                                    
+                                    # 다운로드 링크 추가
+                                    st.markdown(get_image_download_link(fig, f'{title_prefix}{selected_category}_{selected_subcategory}_{selected_detailed}_워드클라우드.png', 
+                                            '분류별 워드클라우드 다운로드'), unsafe_allow_html=True)
+                                except Exception as e:
+                                    st.error(f"워드클라우드 생성 중 오류가 발생했습니다: {e}")
+                            
+                            with col2:
+                                # 주요 단어 표시
+                                word_freq = wordcloud.words_
+                                top_words = dict(sorted(word_freq.items(), key=lambda x: x[1], reverse=True)[:30])
+                                
+                                word_df = pd.DataFrame({
+                                    '단어': list(top_words.keys()),
+                                    '가중치': list(top_words.values())
+                                })
+                                
+                                fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+                                sns.barplot(x=word_df['가중치'].head(20), y=word_df['단어'].head(20), ax=ax, palette=f"{current_theme}_r")
+                                plt.tight_layout()
+                                
+                                st.pyplot(fig, use_container_width=True)
+                                
+                                # 다운로드 링크 추가
+                                st.markdown(get_image_download_link(fig, f'{title_prefix}{selected_category}_{selected_subcategory}_{selected_detailed}_주요단어.png', 
+                                        '분류별 주요단어 다운로드'), unsafe_allow_html=True)
+                    else:
+                        st.warning("분류별 분석에 필요한 컬럼이 데이터에 없습니다.")
+            else:
+                st.warning("정비내용 컬럼이 데이터에 없습니다.")
+        
+        # 정비구분 컬럼 확인 및 값 검증
+        if '정비구분' in df1.columns and df1['정비구분'].notna().any():
+            # 실제 존재하는 정비구분 값 확인
+            maintenance_types = df1['정비구분'].dropna().unique()
+            
+            # 내부, 외부 값이 있는지 확인
+            has_internal = '내부' in maintenance_types
+            has_external = '외부' in maintenance_types
+            
+            # 탭 생성
+            tabs = st.tabs(["전체", "내부", "외부"])
+            
+            # 전체 탭
+            with tabs[0]:
+                display_maintenance_text_analysis(df1, None)
+            
+            # 내부 탭
+            with tabs[1]:
+                if has_internal:
+                    df_internal = df1[df1['정비구분'] == '내부']
+                    display_maintenance_text_analysis(df_internal, "내부")
                 else:
-                    st.warning("분류별 분석에 필요한 컬럼이 데이터에 없습니다.")
+                    st.info("내부 정비 데이터가 없습니다.")
+            
+            # 외부 탭
+            with tabs[2]:
+                if has_external:
+                    df_external = df1[df1['정비구분'] == '외부']
+                    display_maintenance_text_analysis(df_external, "외부")
+                else:
+                    st.info("외부 정비 데이터가 없습니다.")
         else:
-            st.warning("정비내용 컬럼이 데이터에 없습니다.")
+            # 정비구분 컬럼이 없는 경우 전체 데이터만 표시
+            display_maintenance_text_analysis(df1, None)
 
     
     elif menu == "고장 예측":

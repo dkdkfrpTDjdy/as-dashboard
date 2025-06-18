@@ -216,26 +216,26 @@ def calculate_previous_maintenance_dates(df):
 def map_employee_data(df, org_df):
     if org_df is None or df is None:
         return df
-    
+        
     try:
         # 정비일지 데이터인 경우 (정비자번호 있음)
-        if '정비자번호' in df.columns and '사번' in org_df.columns:
+        if '정비자번호' in df.columns and '사번' in org_df.columns and '소속' in org_df.columns:
             # 사번과 정비자번호 매핑
-            df = pd.merge(df, org_df[['사번', '부서', '직급']], 
-                         left_on='정비자번호', right_on='사번', how='left')
-            
+            df = pd.merge(df, org_df[['사번', '소속']],
+                          left_on='정비자번호', right_on='사번', how='left')
+                        
             # 컬럼명 변경
-            df.rename(columns={'부서': '정비자부서', '직급': '정비자직급'}, inplace=True)
-            
+            df.rename(columns={'소속': '정비자소속'}, inplace=True)
+                    
         # 수리비 데이터인 경우 (출고자 있음)
-        if '출고자' in df.columns and '사번' in org_df.columns:
+        if '출고자' in df.columns and '사번' in org_df.columns and '소속' in org_df.columns:
             # 사번과 출고자 매핑
-            df = pd.merge(df, org_df[['사번', '부서', '직급']], 
-                         left_on='출고자', right_on='사번', how='left')
-            
+            df = pd.merge(df, org_df[['사번', '소속']],
+                          left_on='출고자', right_on='사번', how='left')
+                        
             # 컬럼명 변경
-            df.rename(columns={'부서': '출고자부서', '직급': '출고자직급'}, inplace=True)
-            
+            df.rename(columns={'소속': '출고자소속'}, inplace=True)
+                    
         return df
     except Exception as e:
         st.error(f"직원 데이터 매핑 중 오류 발생: {e}")
@@ -283,20 +283,36 @@ if df1 is not None or df3 is not None:
     # 정비일지 데이터 전처리
     if df1 is not None:
         try:
-            # 날짜 변환
-            df1['접수일자'] = pd.to_datetime(df1['접수일자'], errors='coerce')
-            df1['정비일자'] = pd.to_datetime(df1['정비일자'], errors='coerce')
-            df1['최근정비일자'] = pd.to_datetime(df1['최근정비일자'], errors='coerce')
+            # 날짜 변환 (에러 처리 추가)
+            if '접수일자' in df1.columns:
+                try:
+                    df1['접수일자'] = pd.to_datetime(df1['접수일자'], errors='coerce')
+                except Exception as e:
+                    st.warning(f"접수일자 변환 중 오류 발생: {e}")
+                    
+            if '정비일자' in df1.columns:
+                try:
+                    df1['정비일자'] = pd.to_datetime(df1['정비일자'], errors='coerce')
+                except Exception as e:
+                    st.warning(f"정비일자 변환 중 오류 발생: {e}")
+                    
+            if '최근정비일자' in df1.columns:
+                try:
+                    df1['최근정비일자'] = pd.to_datetime(df1['최근정비일자'], errors='coerce')
+                except Exception as e:
+                    st.warning(f"최근정비일자 변환 중 오류 발생: {e}")
             
-            # 처리일수에서 이상치인 -1 값 삭제
-            df1['AS처리일수'] = (df1['정비일자'] - df1['접수일자']).dt.days
-            df1 = df1[df1['AS처리일수'] >= 0]  # 음수 제거
+            # 처리일수 관련 코드는 날짜 변환이 정상적으로 이루어진 경우만 실행
+            if '접수일자' in df1.columns and '정비일자' in df1.columns:
+                if pd.api.types.is_datetime64_dtype(df1['접수일자']) and pd.api.types.is_datetime64_dtype(df1['정비일자']):
+                    df1['AS처리일수'] = (df1['정비일자'] - df1['접수일자']).dt.days
+                    df1 = df1[df1['AS처리일수'] >= 0]  # 음수 제거
             
-            # 재정비 간격 계산 (정비일자 - 최근정비일자)
-            df1['재정비간격'] = (df1['정비일자'] - df1['최근정비일자']).dt.days
-            
-            # 30일 내 재정비 여부
-            df1['30일내재정비'] = (df1['재정비간격'] <= 30) & (df1['재정비간격'] > 0)
+            # 재정비 간격도 날짜 변환이 정상적인 경우만 계산
+            if '정비일자' in df1.columns and '최근정비일자' in df1.columns:
+                if pd.api.types.is_datetime64_dtype(df1['정비일자']) and pd.api.types.is_datetime64_dtype(df1['최근정비일자']):
+                    df1['재정비간격'] = (df1['정비일자'] - df1['최근정비일자']).dt.days
+                    df1['30일내재정비'] = (df1['재정비간격'] <= 30) & (df1['재정비간격'] > 0)
             
             # 브랜드 컬럼 처리 - 제조사명 컬럼이 있으면 그것을 사용, 없으면 '기타'로 채움
             if '제조사명' in df1.columns:
@@ -1885,46 +1901,46 @@ def display_maintenance_dashboard(df, category_name):
         else:
             st.warning("지역 정보가 없습니다.")
     
-    # 정비자 부서별 분석 (조직도 데이터가 있는 경우)
-    if '정비자부서' in df.columns:
-        st.subheader("정비자 부서별 분석")
-        
+    # 정비자 소속별 분석 (조직도 데이터가 있는 경우)
+    if '정비자소속' in df.columns:
+        st.subheader("정비자 소속별 분석")
+                
         col1, col2 = st.columns(2)
-        
+                
         with col1:
-            # 부서별 정비 건수
-            dept_counts = df['정비자부서'].value_counts().head(10)
-            
+            # 소속별 정비 건수
+            dept_counts = df['정비자소속'].value_counts().head(10)
+                        
             fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
             sns.barplot(x=dept_counts.values, y=dept_counts.index, ax=ax, palette="Blues_r")
-            
+                        
             # 막대 위에 텍스트 표시
             for i, v in enumerate(dept_counts.values):
                 ax.text(v + 0.5, i, str(v), va='center')
-            
+                        
             ax.set_xlabel('정비 건수')
             plt.tight_layout()
-            
+                        
             st.pyplot(fig, use_container_width=True)
-            st.markdown(get_image_download_link(fig, f'{category_name}_부서별_정비건수.png', '부서별 정비건수 다운로드'), unsafe_allow_html=True)
-        
-        with col2:
-            # 부서별 평균 처리일수
-            if 'AS처리일수' in df.columns:
-                dept_avg_days = df.groupby('정비자부서')['AS처리일수'].mean().sort_values(ascending=False).head(10)
+            st.markdown(get_image_download_link(fig, f'{category_name}_소속별_정비건수.png', '소속별 정비건수 다운로드'), unsafe_allow_html=True)
                 
+        with col2:
+            # 소속별 평균 처리일수
+            if 'AS처리일수' in df.columns:
+                dept_avg_days = df.groupby('정비자소속')['AS처리일수'].mean().sort_values(ascending=False).head(10)
+                                
                 fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
                 sns.barplot(x=dept_avg_days.values, y=dept_avg_days.index, ax=ax, palette="Blues_r")
-                
+                                
                 # 막대 위에 텍스트 표시
                 for i, v in enumerate(dept_avg_days.values):
                     ax.text(v + 0.1, i, f"{v:.1f}일", va='center')
-                
+                                
                 ax.set_xlabel('평균 처리일수')
                 plt.tight_layout()
-                
+                                
                 st.pyplot(fig, use_container_width=True)
-                st.markdown(get_image_download_link(fig, f'{category_name}_부서별_평균처리일수.png', '부서별 평균처리일수 다운로드'), unsafe_allow_html=True)
+                st.markdown(get_image_download_link(fig, f'{category_name}_소속별_평균처리일수.png', '소속별 평균처리일수 다운로드'), unsafe_allow_html=True)
             else:
                 st.warning("처리일수 데이터가 없습니다.")
 
@@ -1963,13 +1979,13 @@ def display_repair_cost_dashboard(df):
             st.metric("최근 월 수리 건수", "데이터 없음")
     
     with col4:
-        if '출고자부서' in df.columns:
-            dept_counts = df['출고자부서'].value_counts()
+        if '출고자소속' in df.columns:
+            dept_counts = df['출고자소속'].value_counts()
             top_dept = dept_counts.index[0] if not dept_counts.empty else "정보 없음"
             top_dept_count = dept_counts.iloc[0] if not dept_counts.empty else 0
-            st.metric("최다 출고 부서", f"{top_dept} ({top_dept_count}건)")
+            st.metric("최다 출고 소속", f"{top_dept} ({top_dept_count}건)")
         else:
-            st.metric("최다 출고 부서", "데이터 없음")
+            st.metric("최다 출고 소속", "데이터 없음")
     
     st.markdown("---")
     
@@ -2027,15 +2043,15 @@ def display_repair_cost_dashboard(df):
     
     st.markdown("---")
     
-    # 부서별 수리 건수 및 비용
-    if '출고자부서' in df.columns:
-        st.subheader("부서별 수리 현황")
+    # 소속별 수리 건수 및 비용
+    if '출고자소속' in df.columns:
+        st.subheader("소속별 수리 현황")
         
         col1, col2 = st.columns(2)
         
         with col1:
-            # 부서별 수리 건수
-            dept_counts = df['출고자부서'].value_counts().head(10)
+            # 소속별 수리 건수
+            dept_counts = df['출고자소속'].value_counts().head(10)
             
             fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
             sns.barplot(x=dept_counts.values, y=dept_counts.index, ax=ax, palette="Purples_r")
@@ -2048,14 +2064,14 @@ def display_repair_cost_dashboard(df):
             plt.tight_layout()
             
             st.pyplot(fig, use_container_width=True)
-            st.markdown(get_image_download_link(fig, '부서별_수리건수.png', '부서별 수리건수 다운로드'), unsafe_allow_html=True)
+            st.markdown(get_image_download_link(fig, '소속별_수리건수.png', '소속별 수리건수 다운로드'), unsafe_allow_html=True)
         
         with col2:
-            # 부서별 수리 비용
+            # 소속별 수리 비용
             cost_col = '금액' if '금액' in df.columns else next((col for col in df.columns if '금액' in col), None)
             
             if cost_col:
-                dept_costs = df.groupby('출고자부서')[cost_col].sum().sort_values(ascending=False).head(10)
+                dept_costs = df.groupby('출고자소속')[cost_col].sum().sort_values(ascending=False).head(10)
                 
                 fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
                 sns.barplot(x=dept_costs.values, y=dept_costs.index, ax=ax, palette="Purples_r")
@@ -2068,25 +2084,25 @@ def display_repair_cost_dashboard(df):
                 plt.tight_layout()
                 
                 st.pyplot(fig, use_container_width=True)
-                st.markdown(get_image_download_link(fig, '부서별_수리비용.png', '부서별 수리비용 다운로드'), unsafe_allow_html=True)
+                st.markdown(get_image_download_link(fig, '소속별_수리비용.png', '소속별 수리비용 다운로드'), unsafe_allow_html=True)
     
-    # 부서별 인원 대비 수리 건수 (조직도 데이터가 있는 경우)
-    if '출고자부서' in df.columns and df4 is not None and '부서' in df4.columns:
-        st.subheader("부서별 인원 대비 수리 건수")
+    # 소속별 인원 대비 수리 건수 (조직도 데이터가 있는 경우)
+    if '출고자소속' in df.columns and df4 is not None and '소속' in df4.columns:
+        st.subheader("소속별 인원 대비 수리 건수")
         
-        # 부서별 인원 수 계산
-        dept_staff = df4.groupby('부서').size()
+        # 소속별 인원 수 계산
+        dept_staff = df4.groupby('소속').size()
         
-        # 부서별 수리 건수
-        repair_by_dept = df.groupby('출고자부서').size()
+        # 소속별 수리 건수
+        repair_by_dept = df.groupby('출고자소속').size()
         
-        # 공통 부서만 추출
+        # 공통 소속만 추출
         common_depts = sorted(set(dept_staff.index) & set(repair_by_dept.index))
         
         if common_depts:
             # 데이터 준비
             dept_comparison = pd.DataFrame({
-                '부서': common_depts,
+                '소속': common_depts,
                 '인원수': [dept_staff.get(dept, 0) for dept in common_depts],
                 '수리건수': [repair_by_dept.get(dept, 0) for dept in common_depts]
             })
@@ -2098,7 +2114,7 @@ def display_repair_cost_dashboard(df):
             col1, col2 = st.columns(2)
             
             with col1:
-                # 부서별 인원 및 수리 건수 비교
+                # 소속별 인원 및 수리 건수 비교
                 fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
                 
                 x = np.arange(len(dept_comparison))
@@ -2116,7 +2132,7 @@ def display_repair_cost_dashboard(df):
                 
                 # 축 설정
                 ax.set_xticks(x)
-                ax.set_xticklabels(dept_comparison['부서'], rotation=45, ha='right')
+                ax.set_xticklabels(dept_comparison['소속'], rotation=45, ha='right')
                 ax.legend()
                 
                 # 보조 y축 추가 (실제 인원수)
@@ -2126,12 +2142,12 @@ def display_repair_cost_dashboard(df):
                 
                 plt.tight_layout()
                 st.pyplot(fig, use_container_width=True)
-                st.markdown(get_image_download_link(fig, '부서별_인원수리건수_비교.png', '부서별 인원수리건수 비교 다운로드'), unsafe_allow_html=True)
+                st.markdown(get_image_download_link(fig, '소속별_인원수리건수_비교.png', '소속별 인원수리건수 비교 다운로드'), unsafe_allow_html=True)
             
             with col2:
                 # 인원당 수리 건수
                 fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                sns.barplot(x=dept_comparison['인원당수리건수'], y=dept_comparison['부서'], ax=ax, palette="Purples_r")
+                sns.barplot(x=dept_comparison['인원당수리건수'], y=dept_comparison['소속'], ax=ax, palette="Purples_r")
                 
                 # 막대 위에 텍스트 표시
                 for i, v in enumerate(dept_comparison['인원당수리건수']):
@@ -2141,25 +2157,25 @@ def display_repair_cost_dashboard(df):
                 plt.tight_layout()
                 
                 st.pyplot(fig, use_container_width=True)
-                st.markdown(get_image_download_link(fig, '부서별_인원당수리건수.png', '부서별 인원당수리건수 다운로드'), unsafe_allow_html=True)
+                st.markdown(get_image_download_link(fig, '소속별_인원당수리건수.png', '소속별 인원당수리건수 다운로드'), unsafe_allow_html=True)
 
-    else:
-        st.header("산업장비 AS 대시보드")
-        st.info("좌측에 데이터 파일을 업로드해 주세요.")
-        
-        # 대시보드 설명 표시
-        st.markdown("""
-        ### 분석 메뉴
-        
-        1. **정비일지 대시보드**: 정비일지 데이터 기반의 AS 분석 (정비구분별 탭 제공)
-        2. **수리비 대시보드**: 수리비 데이터 기반의 비용 분석
-        3. **고장 유형 분석**: 고장 유형 분포 및 브랜드-모델별 고장 패턴 히트맵
-        4. **브랜드/모델 분석**: 브랜드 및 모델별 특성 분석
-        5. **정비내용 분석**: 정비내용 워드클라우드 및 분류별 정비내용 분석
-        6. **고장 예측**: 기계학습 모델을 활용한 재정비 기간 및 증상 예측
-        
-        ### 필요한 파일
-        
-        - **정비일지 데이터**: 장비 AS 정보
-        - **수리비 데이터**: 수리비용 정보
-        """)
+else:
+    st.header("산업장비 AS 대시보드")
+    st.info("좌측에 데이터 파일을 업로드해 주세요.")
+    
+    # 대시보드 설명 표시
+    st.markdown("""
+    ### 분석 메뉴
+    
+    1. **정비일지 대시보드**: 정비일지 데이터 기반의 AS 분석 (정비구분별 탭 제공)
+    2. **수리비 대시보드**: 수리비 데이터 기반의 비용 분석
+    3. **고장 유형 분석**: 고장 유형 분포 및 브랜드-모델별 고장 패턴 히트맵
+    4. **브랜드/모델 분석**: 브랜드 및 모델별 특성 분석
+    5. **정비내용 분석**: 정비내용 워드클라우드 및 분류별 정비내용 분석
+    6. **고장 예측**: 기계학습 모델을 활용한 재정비 기간 및 증상 예측
+    
+    ### 필요한 파일
+    
+    - **정비일지 데이터**: 장비 AS 정보
+    - **수리비 데이터**: 수리비용 정보
+    """)

@@ -96,14 +96,7 @@ color_themes = {
 # 사이드바 설정
 st.sidebar.title("데이터 업로드 및 메뉴 클릭")
 
-# 파일 업로더 - 사용자가 업로드할 파일만 표시
-uploaded_file1 = st.sidebar.file_uploader("**정비일지 데이터 업로드**", type=["xlsx"])
-uploaded_file3 = st.sidebar.file_uploader("**수리비 데이터 업로드**", type=["xlsx"])
-
-# 자동 로드되는 파일 안내
-st.sidebar.info("자산조회 데이터와 조직도 데이터는 자동으로 로드됩니다.")
-
-# 데이터 로드 함수
+# 데이터 로드 함수 (한 번만 정의)
 @st.cache_data
 def load_data(file):
     try:
@@ -113,9 +106,18 @@ def load_data(file):
         st.error(f"파일 로드 오류: {e}")
         return None
 
-# 샘플 데이터 경로 또는 업로드된 파일 사용
+# 변수 초기화 (한 번만 초기화)
 df1 = None  # 정비일지 데이터 (사용자 업로드)
+df2 = None  # 자산조회 데이터
 df3 = None  # 수리비 데이터 (사용자 업로드)
+df4 = None  # 조직도 데이터
+
+# 파일 업로더 - 사용자가 업로드할 파일만 표시
+uploaded_file1 = st.sidebar.file_uploader("**정비일지 데이터 업로드**", type=["xlsx"])
+uploaded_file3 = st.sidebar.file_uploader("**수리비 데이터 업로드**", type=["xlsx"])
+
+# 자동 로드되는 파일 안내
+st.sidebar.info("자산조회 데이터와 조직도 데이터는 자동으로 로드됩니다.")
 
 # 사용자 업로드 파일 처리
 if uploaded_file1 is not None:

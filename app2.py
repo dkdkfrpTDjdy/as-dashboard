@@ -147,16 +147,6 @@ except Exception as e:
     st.sidebar.warning(f"조직도 데이터를 로드할 수 없습니다: {e}")
     df4 = None
 
-# 데이터 로드 함수
-@st.cache_data
-def load_data(file):
-    try:
-        df = pd.read_excel(file)
-        return df
-    except Exception as e:
-        st.error(f"파일 로드 오류: {e}")
-        return None
-
 # 주소에서 지역 추출 함수
 def extract_region_from_address(address):
     if not isinstance(address, str):
@@ -250,26 +240,6 @@ def map_employee_data(df, org_df):
     except Exception as e:
         st.error(f"직원 데이터 매핑 중 오류 발생: {e}")
         return df
-
-# 샘플 데이터 경로 또는 업로드된 파일 사용
-df1 = None  # 정비일지 데이터
-df2 = None  # 자산조회 데이터
-df3 = None  # 수리비 데이터
-df4 = None  # 조직도 데이터
-
-if uploaded_file1 is not None:
-    df1 = load_data(uploaded_file1)
-    file_name1 = uploaded_file1.name
-
-if uploaded_file2 is not None:
-    df2 = load_data(uploaded_file2)
-
-if uploaded_file3 is not None:
-    df3 = load_data(uploaded_file3)
-    file_name3 = uploaded_file3.name
-
-if uploaded_file4 is not None:
-    df4 = load_data(uploaded_file4)
 
 # 데이터 병합 및 전처리
 if df1 is not None:

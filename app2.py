@@ -2069,7 +2069,6 @@ if df1 is not None or df3 is not None:
             title_prefix = ""
     
         # 텍스트 데이터 확인
-        if '정비내용' in df1.columns:
         if '정비내용' in filtered_df.columns:
             # 정비내용 데이터 준비
 
@@ -2159,7 +2158,6 @@ if df1 is not None or df3 is not None:
                 st.subheader("분류별 정비내용 워드클라우드")
                 st.subheader(f"{title_prefix}분류별 정비내용 워드클라우드")
 
-                if all(col in df1.columns for col in ['작업유형', '정비대상', '정비작업', '정비내용']):
                 if all(col in filtered_df.columns for col in ['작업유형', '정비대상', '정비작업', '정비내용']):
                     col1, col2, col3 = st.columns(3)
 

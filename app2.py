@@ -398,8 +398,6 @@ if df1 is not None:
         # 병합 결과 확인
         if '브랜드' in df1.columns:
             brand_counts = df1['브랜드'].value_counts()
-            st.sidebar.write("병합 후 브랜드 분포:")
-            st.sidebar.write(brand_counts.head(5))
             
             # 기타 비율이 너무 높으면 경고
             if '기타' in brand_counts.index and brand_counts['기타'] / len(df1) > 0.5:
@@ -671,7 +669,7 @@ def display_maintenance_dashboard(df, category_name):
             # 막대 위에 텍스트 표시 (인원당 건수, 총 건수, 소속 인원수)
             for i, row in enumerate(dept_comparison.itertuples()):
                 ax.text(row.인원당건수 + 0.1, i, 
-                       f"{row.인원당건수:.1f}건/인 (총 {row.정비건수}건, {row.소속인원수}명)", 
+                       f"{row.인원당건수:.1f}건/인)", 
                        va='center', fontsize=8)
 
             ax.set_xlabel('인원당 정비 건수')
@@ -709,7 +707,7 @@ def display_maintenance_dashboard(df, category_name):
                 # 막대 위에 텍스트 표시
                 for i, row in enumerate(dept_time_comparison.itertuples()):
                     ax.text(row.인원당수리시간 + 0.1, i, 
-                           f"{row.인원당수리시간:.1f}시간/인 (총 {row.총수리시간:.1f}시간, {row.소속인원수}명)", 
+                           f"{row.인원당수리시간:.1f}시간/인)", 
                            va='center', fontsize=8)
 
                 ax.set_xlabel('인원당 수리시간 (시간)')
@@ -781,7 +779,7 @@ def display_repair_cost_dashboard(df):
             monthly_counts = df_time.groupby('월').size().reset_index(name='건수')
             monthly_counts['월'] = monthly_counts['월'].astype(str)
 
-            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
             sns.barplot(x='월', y='건수', data=monthly_counts, ax=ax, palette='Purples')
 
             # 막대 위에 텍스트 표시
@@ -805,7 +803,7 @@ def display_repair_cost_dashboard(df):
             monthly_costs['월'] = monthly_costs['월'].astype(str)
             
             # % 제거
-            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
             sns.barplot(x='월', y=cost_col, data=monthly_costs, ax=ax, palette='Purples')
 
             # 막대 위에 텍스트 표시 (비용만)
@@ -847,13 +845,13 @@ def display_repair_cost_dashboard(df):
             # 결과 소트
             dept_comparison = dept_comparison.sort_values('인원당비용', ascending=False)
             
-            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+            fig, ax = create_figure_with_korean(figsize=(8, 8), dpi=300)
             sns.barplot(x=dept_comparison['인원당비용'], y=dept_comparison['소속'], ax=ax, palette="Purples_r")
             
             # 막대 위에 텍스트 표시 (인원당 비용, 총 비용, 소속 인원수)
             for i, row in enumerate(dept_comparison.itertuples()):
                 ax.text(row.인원당비용 + 100, i, 
-                       f"{row.인원당비용:,.0f}원/인 (총 {row.총수리비용:,.0f}원, {row.소속인원수}명)", 
+                       f"{row.인원당비용:,.0f}원/인)", 
                        va='center', fontsize=8)
             
             ax.set_xlabel('인원당 수리 비용 (원)')
@@ -873,7 +871,7 @@ def display_repair_cost_dashboard(df):
             # 모델별 평균 단가 계산
             model_prices = df.groupby('모델명')['단가'].mean().sort_values(ascending=False).head(15)
             
-            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+            fig, ax = create_figure_with_korean(figsize=(12, 8), dpi=300)
             sns.barplot(x=model_prices.values, y=model_prices.index, ax=ax, palette="Purples_r")
             
             # 막대 위에 텍스트 표시
@@ -896,8 +894,8 @@ def display_repair_cost_dashboard(df):
             pivot_data = pd.pivot_table(
                 high_cost_df, 
                 values='출고금액', 
-                index='출고자소속', 
-                columns='모델명',
+                index='모델명', 
+                columns='출고자소속',
                 aggfunc='sum',
                 fill_value=0
             ).head(10)
@@ -905,7 +903,6 @@ def display_repair_cost_dashboard(df):
             fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
             sns.heatmap(pivot_data, annot=True, fmt=',d', cmap='Purples', ax=ax, linewidths=.5)
             
-            plt.title('소속별 고가 모델 지출 현황 (단위: 원)')
             plt.tight_layout()
             
             st.pyplot(fig, use_container_width=True)

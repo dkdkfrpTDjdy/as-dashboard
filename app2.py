@@ -1932,15 +1932,24 @@ if df1 is not None or df3 is not None:
             @st.cache_resource
             def prepare_prediction_model(df):
                 try:
+                    print("prepare_prediction_model 함수 실행 중")  # 디버깅 메시지
+                    
                     # 필수 컬럼 체크
                     required_cols = ['브랜드', '모델명', '작업유형', '정비대상', '정비작업', '제조년도']
                     if not all(col in df.columns for col in required_cols):
-                        st.warning(f"필수 컬럼이 없습니다: {[col for col in required_cols if col not in df.columns]}")
+                        missing_cols = [col for col in required_cols if col not in df.columns]
+                        print(f"필수 컬럼 없음: {missing_cols}")  # 디버깅 메시지
+                        st.warning(f"필수 컬럼이 없습니다: {missing_cols}")
                         return [None] * 10
-
-                    model_df = df.dropna(subset=required_cols[:-1]).copy()  # 제조년도는 후처리로
-
+                        
+                    # 데이터 확인
+                    print(f"전체 데이터 수: {len(df)}")  # 디버깅 메시지
+                    
+                    model_df = df.dropna(subset=required_cols[:-1]).copy()
+                    print(f"필수값 있는 데이터 수: {len(model_df)}")  # 디버깅 메시지
+                    
                     if len(model_df) < 100:
+                        print(f"데이터 부족: {len(model_df)}개")  # 디버깅 메시지
                         st.warning(f"학습 데이터가 부족합니다: {len(model_df)}개 (최소 100개 필요)")
                         return [None] * 10
 
@@ -2020,8 +2029,11 @@ if df1 is not None or df3 is not None:
                     st.error(traceback.format_exc())
                     return [None] * 10
         
-            # 모델 준비 (백그라운드에서 실행)
             models = prepare_prediction_model(df1)
+            if models[0] is None:  # 첫 번째 요소가 None이면 모든 요소가 None
+                st.error("예측 모델 준비에 실패했습니다. 데이터를 확인하세요.")
+                st.stop()  # 여기서 실행 중단
+
             interval_model, category_model, subcategory_model, detail_model, le_brand, le_model, le_category, le_subcategory, le_detail, le_year_range = models
             
             # 모델이 준비되었는지 확인

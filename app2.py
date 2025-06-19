@@ -111,7 +111,6 @@ def group_small_categories(series, threshold=0.03):
         return pd.concat([series[~mask], others])
     return series
 
-# 두 데이터프레임 병합 함수 - 수정: 제조사명 매핑 개선
 # 두 데이터프레임 병합 함수
 def merge_dataframes(df1, df2):
     if df1 is None or df2 is None:
@@ -128,7 +127,6 @@ def merge_dataframes(df1, df2):
         # 중복 행 제거
         merged_df = merged_df.drop_duplicates()
 
-        # 제조사명을 브랜드로 매핑 - 수정
         # 제조사명을 브랜드로 매핑 (기존 브랜드 컬럼이 없거나 NaN인 경우에만)
         if '제조사명' in merged_df.columns:
             if '브랜드' not in merged_df.columns:
@@ -263,7 +261,6 @@ def load_data(file):
                     '소분류': '정비작업'
                 }, inplace=True)
 
-            # 고장유형 조합 - nan값 제외하도록 수정
             # 브랜드 컬럼 처리 - 제조사명 컬럼이 있으면 그것을 사용, 없으면 '기타'로 채움
             if '제조사명' in df.columns:
                 df['브랜드'] = df['제조사명'].fillna('기타')
@@ -277,13 +274,11 @@ def load_data(file):
                 df.loc[mask, '고장유형'] = (df.loc[mask, '작업유형'].astype(str) + '_' + 
                                          df.loc[mask, '정비대상'].astype(str) + '_' + 
                                          df.loc[mask, '정비작업'].astype(str))
-                df['고장유형'] = df['작업유형'].astype(str) + '_' + df['정비대상'].astype(str) + '_' + df['정비작업'].astype(str)
 
             # 브랜드_모델 조합 (브랜드와 모델명이 있는 경우)
             if '브랜드' in df.columns and '모델명' in df.columns:
                 mask = df['브랜드'].notna() & df['모델명'].notna()
                 df.loc[mask, '브랜드_모델'] = df.loc[mask, '브랜드'].astype(str) + '_' + df.loc[mask, '모델명'].astype(str)
-                df['브랜드_모델'] = df['브랜드'].astype(str) + '_' + df['모델명'].astype(str)
 
         except Exception as e:
             st.warning(f"일부 데이터 전처리 중 오류가 발생했습니다: {e}")
@@ -385,9 +380,6 @@ if df3 is not None:
     except Exception as e:
         st.warning(f"수리비 데이터 전처리 중 오류가 발생했습니다: {e}")
 
-# 정비일지 대시보드 표시 함수 - 수정됨
-# 이제 데이터 로딩과 전처리가 모두 완료되었으므로, 대시보드 표시 함수를 정의합니다.
-
 # 정비일지 대시보드 표시 함수
 def display_maintenance_dashboard(df, category_name):
     # 지표 카드용 컬럼 생성
@@ -442,8 +434,6 @@ def display_maintenance_dashboard(df, category_name):
 
     st.markdown("---")
 
-    # 1. 월별 AS건수
-    col1, col2 = st.columns(2)
     # 1. 월별 AS건수 + 월별 평균 가동 및 수리시간 + 수리시간 분포
     col1, col2, col3 = st.columns(3)
 
@@ -479,26 +469,25 @@ def display_maintenance_dashboard(df, category_name):
             st.subheader("월별 평균 가동시간")
             if '정비일자' in df.columns:
                 df['월'] = df['정비일자'].dt.to_period('M')
-                # 이후 그래프 생성
+                
+                monthly_avg = df.groupby('월')['가동시간'].mean().reset_index()
+                
+                fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+                sns.barplot(data=monthly_avg, x='월', y='가동시간', ax=ax, palette="Blues")
+                
+                # 평균값 텍스트 표시
+                for index, row in monthly_avg.iterrows():
+                    ax.text(index, row['가동시간'] + 0.2, f"{row['가동시간']:.1f}시간", ha='center')
+                
+                plt.xticks(rotation=45)
+                plt.tight_layout()
+                
+                st.pyplot(fig, use_container_width=True)
+                
+                # 다운로드 링크 추가
+                st.markdown(get_image_download_link(fig, f'{category_name}_월별_평균_가동시간.png', '월별 평균 가동시간 다운로드'), unsafe_allow_html=True)
             else:
                 st.warning("정비일자 컬럼이 없습니다. 월별 분석을 건너뜁니다.")
-                
-            monthly_avg = df.groupby('월')['가동시간'].mean().reset_index()
-            
-            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
-            sns.barplot(data=monthly_avg, x='월', y='가동시간', ax=ax, palette="Blues")
-            
-            # 평균값 텍스트 표시
-            for index, row in monthly_avg.iterrows():
-                ax.text(index, row['가동시간'] + 0.2, f"{row['가동시간']:.1f}시간", ha='center')
-            
-            plt.xticks(rotation=45)
-            plt.tight_layout()
-            
-            st.pyplot(fig, use_container_width=True)
-            
-            # 다운로드 링크 추가
-            st.markdown(get_image_download_link(fig, f'{category_name}_월별_평균_가동시간.png', '월별 평균 가동시간 다운로드'), unsafe_allow_html=True)
         
     with col3:
         if '수리시간' in df.columns:
@@ -549,41 +538,39 @@ def display_maintenance_dashboard(df, category_name):
         # 두 컬럼이 모두 있는 경우에만 가동률 분석 수행
         if operation_col and repair_col:
             valid_operation = valid_operation.dropna(subset=[operation_col, repair_col])
-            # 이후 코드에서도 'operation_col'과 'repair_col' 변수를 사용
+            
+            if len(valid_operation) > 0:
+                # 가동률 = 가동시간 / (가동시간 + 수리시간)
+                valid_operation['가동률'] = valid_operation[operation_col] / (valid_operation[operation_col] + valid_operation[repair_col])
+                valid_operation['가동률'] = valid_operation['가동률'] * 100  # 퍼센트로 변환
+                
+                # 가동률 구간화
+                bins = [0, 80, 90, 95, 100]
+                labels = ['80% 미만', '80-90%', '90-95%', '95% 이상']
+                valid_operation['가동률_구간'] = pd.cut(valid_operation['가동률'], bins=bins, labels=labels)
+                operation_rate_counts = valid_operation['가동률_구간'].value_counts().sort_index()
+                
+                fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+                sns.barplot(x=operation_rate_counts.index, y=operation_rate_counts.values, ax=ax, palette="Blues")
+                
+                # 막대 위에 텍스트 표시
+                for i, v in enumerate(operation_rate_counts.values):
+                    ax.text(i, v + max(operation_rate_counts.values) * 0.02, str(v),
+                          ha='center', fontsize=12)
+                
+                plt.tight_layout()
+                st.pyplot(fig, use_container_width=True)
+                
+                # 다운로드 링크 추가
+                st.markdown(get_image_download_link(fig, f'{category_name}_가동률_분포.png', '가동률 분포 다운로드'), unsafe_allow_html=True)
+                
+                # 평균 가동률 정보 추가
+                avg_operation_rate = valid_operation['가동률'].mean()
+                st.info(f"평균 가동률: {avg_operation_rate:.2f}%")
+            else:
+                st.warning("가동시간 및 수리시간 데이터가 부족합니다.")
         else:
             st.warning("가동시간 또는 수리시간 컬럼을 찾을 수 없습니다.")
-        
-        if len(valid_operation) > 0:
-            # 가동률 = 가동시간 / (가동시간 + 수리시간)
-            valid_operation['가동률'] = valid_operation['가동시간'] / (valid_operation['가동시간'] + valid_operation['수리시간'])
-            valid_operation['가동률'] = valid_operation['가동률'] * 100  # 퍼센트로 변환
-            
-            # 가동률 구간화
-            bins = [0, 80, 90, 95, 100]
-            labels = ['80% 미만', '80-90%', '90-95%', '95% 이상']
-            valid_operation['가동률_구간'] = pd.cut(valid_operation['가동률'], bins=bins, labels=labels)
-            operation_rate_counts = valid_operation['가동률_구간'].value_counts().sort_index()
-            
-            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
-            sns.barplot(x=operation_rate_counts.index, y=operation_rate_counts.values, ax=ax, palette="Blues")
-            
-            # 막대 위에 텍스트 표시
-            for i, v in enumerate(operation_rate_counts.values):
-                ax.text(i, v + max(operation_rate_counts.values) * 0.02, str(v),
-                      ha='center', fontsize=12)
-            
-            plt.tight_layout()
-            st.pyplot(fig, use_container_width=True)
-            
-            # 다운로드 링크 추가
-            st.markdown(get_image_download_link(fig, f'{category_name}_가동률_분포.png', '가동률 분포 다운로드'), unsafe_allow_html=True)
-            
-            # 평균 가동률 정보 추가
-            avg_operation_rate = valid_operation['가동률'].mean()
-            st.info(f"평균 가동률: {avg_operation_rate:.2f}%")
-            
-        else:
-            st.warning("가동시간 및 수리시간 데이터가 부족합니다.")
             
     with col2:
         if '수리시간' in df.columns and '가동시간' in df.columns:
@@ -670,9 +657,6 @@ def display_maintenance_dashboard(df, category_name):
     st.markdown("---")
 
     # 정비자 소속별 분석 (조직도 데이터가 있는 경우) - 수정됨: 전체 대비 비율 표시
-
-    
-    # 정비자 소속별 분석 (조직도 데이터가 있는 경우)
     if '정비자소속' in df.columns:
         st.subheader("정비자 소속별 분석")
 
@@ -680,31 +664,24 @@ def display_maintenance_dashboard(df, category_name):
 
         with col1:
             # 소속별 정비 건수 및 비율
-            # 소속별 정비 건수
             dept_counts = df['정비자소속'].value_counts().head(10)
             # 전체 건수 대비 비율 계산
             dept_ratio = (dept_counts / dept_counts.sum() * 100).round(1)
 
             fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-            bars = sns.barplot(x=dept_counts.values, y=dept_counts.index, ax=ax, palette="Blues_r")
             sns.barplot(x=dept_counts.values, y=dept_counts.index, ax=ax, palette="Blues_r")
 
             # 막대 위에 텍스트 표시 (건수와 비율 함께 표시)
             for i, (v, r) in enumerate(zip(dept_counts.values, dept_ratio.values)):
                 ax.text(v + 0.5, i, f"{v} ({r:.1f}%)", va='center')
-            # 막대 위에 텍스트 표시
-            for i, v in enumerate(dept_counts.values):
-                ax.text(v + 0.5, i, str(v), va='center')
 
             ax.set_xlabel('정비 건수 (비율)')
-            ax.set_xlabel('정비 건수')
             plt.tight_layout()
 
             st.pyplot(fig, use_container_width=True)
             st.markdown(get_image_download_link(fig, f'{category_name}_소속별_정비건수.png', '소속별 정비건수 다운로드'), unsafe_allow_html=True)
 
         with col2:
-            # 소속별 평균 수리시간 및 비율
             # 소속별 평균 수리시간
             if '수리시간' in df.columns:
                 # 소속별 총 수리시간 계산
@@ -712,26 +689,19 @@ def display_maintenance_dashboard(df, category_name):
                 # 전체 수리시간 대비 비율 계산
                 total_repair_time = df['수리시간'].sum()
                 dept_repair_ratio = (dept_total_repair_time / total_repair_time * 100).round(1)
-                dept_avg_repair = df.groupby('정비자소속')['수리시간'].mean().sort_values(ascending=False).head(10)
 
                 fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                bars = sns.barplot(x=dept_total_repair_time.values, y=dept_total_repair_time.index, ax=ax, palette="Blues_r")
-                sns.barplot(x=dept_avg_repair.values, y=dept_avg_repair.index, ax=ax, palette="Blues_r")
+                sns.barplot(x=dept_total_repair_time.values, y=dept_total_repair_time.index, ax=ax, palette="Blues_r")
 
                 # 막대 위에 텍스트 표시 (시간과 비율)
                 for i, (v, r) in enumerate(zip(dept_total_repair_time.values, dept_repair_ratio.values)):
                     ax.text(v + 0.1, i, f"{v:.1f}시간 ({r:.1f}%)", va='center')
-                # 막대 위에 텍스트 표시
-                for i, v in enumerate(dept_avg_repair.values):
-                    ax.text(v + 0.1, i, f"{v:.1f}시간", va='center')
 
                 ax.set_xlabel('총 수리시간 (비율)')
-                ax.set_xlabel('평균 수리시간')
                 plt.tight_layout()
 
                 st.pyplot(fig, use_container_width=True)
                 st.markdown(get_image_download_link(fig, f'{category_name}_소속별_총수리시간.png', '소속별 총수리시간 다운로드'), unsafe_allow_html=True)
-                st.markdown(get_image_download_link(fig, f'{category_name}_소속별_평균수리시간.png', '소속별 평균수리시간 다운로드'), unsafe_allow_html=True)
             else:
                 st.warning("수리시간 데이터가 없습니다.")
 
@@ -969,7 +939,7 @@ def display_repair_cost_dashboard(df):
             st.pyplot(fig, use_container_width=True)
             st.markdown(get_image_download_link(fig, '소속별_고가모델_지출.png', '소속별 고가모델 지출 다운로드'), unsafe_allow_html=True)
 
-# 고장 유형 분석 함수 - 수정: 내부/외부/전체 탭 추가
+# 고장 유형 분석 함수
 def display_fault_analysis(df, maintenance_type=None):
     # 필터링 (내부/외부/전체)
     if maintenance_type and maintenance_type != "전체":
@@ -1063,15 +1033,10 @@ def display_fault_analysis(df, maintenance_type=None):
 
         # 자재내역 분석 섹션 추가 - 자재내역 컬럼이 있는 경우만 표시
         st.subheader(f"{title_prefix}모델 타입 분석")
-    # 소속별 인원 대비 수리 건수 (조직도 데이터가 있는 경우)
-    if '출고자소속' in df.columns and df4 is not None and '소속' in df4.columns:
-        st.subheader("소속별 인원 대비 수리 건수")
 
         # 탭으로 분석 항목 구분
         tabs = st.tabs(["연료", "운전방식", "적재용량", "마스트"])
-        # 소속별 인원 수 계산
-        dept_staff = df4.groupby('소속').size()
-
+        
         # 연료별 분석
         with tabs[0]:
             if '연료' in filtered_df.columns:
@@ -1132,13 +1097,191 @@ def display_fault_analysis(df, maintenance_type=None):
                         st.warning("고장유형 데이터가 없습니다.")
             else:
                 st.warning("연료 데이터가 없습니다.")
-        # 소속별 수리 건수
-        repair_by_dept = df.groupby('출고자소속').size()
 
-        # 이하 다른 탭들도 동일하게 필터링 적용 (생략)
-        # 공통 소속만 추출
-        common_depts = sorted(set(dept_staff.index) & set(repair_by_dept.index))
+        # 운전방식별 분석
+        with tabs[1]:
+            if '운전방식' in filtered_df.columns:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # 운전방식별 AS 건수
+                    st.subheader(f"{title_prefix}운전방식별 AS 건수")
+                    driving_type_counts = filtered_df['운전방식'].value_counts().head(15)
+                    
+                    if len(driving_type_counts) > 0:
+                        fig, ax = create_figure_with_korean(figsize=(10, 9), dpi=300)
+                        sns.barplot(x=driving_type_counts.index, y=driving_type_counts.values, ax=ax, palette=f"{current_theme}_r")
+                        
+                        # 막대 위에 텍스트 표시
+                        for i, v in enumerate(driving_type_counts.values):
+                            ax.text(i, v + max(driving_type_counts.values) * 0.01, str(v),
+                                  ha='center', fontsize=12)
+                            
+                        plt.tight_layout()
+                        plt.xticks(rotation=45)
+                        st.pyplot(fig, use_container_width=True)
+                        
+                        # 다운로드 링크 추가
+                        st.markdown(get_image_download_link(fig, f'{title_prefix}운전방식별_AS_건수.png', '운전방식별 AS 건수 다운로드'), unsafe_allow_html=True)
+                    else:
+                        st.warning("운전방식 데이터가 없습니다.")
+                
+                with col2:
+                    # 운전방식별 고장유형 Top 10
+                    st.subheader(f"{title_prefix}운전방식별 고장유형")
+                    
+                    # 운전방식 선택
+                    driving_types = ["전체"] + filtered_df['운전방식'].value_counts().index.tolist()
+                    selected_driving = st.selectbox("운전방식", driving_types, key=f"driving_{maintenance_type}")
+                    
+                    if selected_driving != "전체":
+                        filtered_df_driving = filtered_df[filtered_df['운전방식'] == selected_driving]
+                    else:
+                        filtered_df_driving = filtered_df
+                        
+                    if '고장유형' in filtered_df_driving.columns:
+                        top_faults_by_driving = filtered_df_driving['고장유형'].value_counts().head(10)
+                        
+                        fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+                        sns.barplot(x=top_faults_by_driving.values, y=top_faults_by_driving.index, ax=ax, palette=f"{current_theme}_r")
+                        
+                        # 막대 위에 텍스트 표시
+                        for i, v in enumerate(top_faults_by_driving.values):
+                            ax.text(v + max(top_faults_by_driving.values) * 0.002, i, str(v),
+                                  va='center', fontsize=12)
+                            
+                        plt.tight_layout()
+                        st.pyplot(fig, use_container_width=True)
+                        
+                        # 다운로드 링크 추가
+                        st.markdown(get_image_download_link(fig, f'{title_prefix}{selected_driving}_고장유형_TOP10.png', f'{selected_driving} 고장유형 TOP10 다운로드'), unsafe_allow_html=True)
+                    else:
+                        st.warning("고장유형 데이터가 없습니다.")
+            else:
+                st.warning("운전방식 데이터가 없습니다.")
 
+        # 적재용량별 분석
+        with tabs[2]:
+            if '적재용량' in filtered_df.columns:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # 적재용량별 AS 건수
+                    st.subheader(f"{title_prefix}적재용량별 AS 건수")
+                    load_capacity_counts = filtered_df['적재용량'].value_counts().head(15)
+                    
+                    if len(load_capacity_counts) > 0:
+                        fig, ax = create_figure_with_korean(figsize=(10, 9), dpi=300)
+                        sns.barplot(x=load_capacity_counts.index, y=load_capacity_counts.values, ax=ax, palette=f"{current_theme}_r")
+                        
+                        # 막대 위에 텍스트 표시
+                        for i, v in enumerate(load_capacity_counts.values):
+                            ax.text(i, v + max(load_capacity_counts.values) * 0.02, str(v),
+                                  ha='center', fontsize=12)
+                            
+                        plt.tight_layout()
+                        st.pyplot(fig, use_container_width=True)
+                        
+                        # 다운로드 링크 추가
+                        st.markdown(get_image_download_link(fig, f'{title_prefix}적재용량별_AS_건수.png', '적재용량별 AS 건수 다운로드'), unsafe_allow_html=True)
+                    else:
+                        st.warning("적재용량 데이터가 없습니다.")
+                
+                with col2:
+                    # 적재용량별 고장유형 Top 10
+                    st.subheader(f"{title_prefix}적재용량별 고장유형")
+                    
+                    # 적재용량 선택
+                    load_capacities = ["전체"] + filtered_df['적재용량'].value_counts().index.tolist()
+                    selected_capacity = st.selectbox("적재용량", load_capacities, key=f"capacity_{maintenance_type}")
+                    
+                    if selected_capacity != "전체":
+                        filtered_df_capacity = filtered_df[filtered_df['적재용량'] == selected_capacity]
+                    else:
+                        filtered_df_capacity = filtered_df
+                        
+                    if '고장유형' in filtered_df_capacity.columns:
+                        top_faults_by_capacity = filtered_df_capacity['고장유형'].value_counts().head(10)
+                        
+                        fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+                        sns.barplot(x=top_faults_by_capacity.values, y=top_faults_by_capacity.index, ax=ax, palette=f"{current_theme}_r")
+                        
+                        # 막대 위에 텍스트 표시
+                        for i, v in enumerate(top_faults_by_capacity.values):
+                            ax.text(v + max(top_faults_by_capacity.values) * 0.002, i, str(v),
+                                  va='center', fontsize=12)
+                            
+                        plt.tight_layout()
+                        st.pyplot(fig, use_container_width=True)
+                        
+                        # 다운로드 링크 추가
+                        st.markdown(get_image_download_link(fig, f'{title_prefix}{selected_capacity}_고장유형_TOP10.png', f'{selected_capacity} 고장유형 TOP10 다운로드'), unsafe_allow_html=True)
+                    else:
+                        st.warning("고장유형 데이터가 없습니다.")
+            else:
+                st.warning("적재용량 데이터가 없습니다.")
+
+        # 마스트별 분석
+        with tabs[3]:
+            if '마스트' in filtered_df.columns:
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # 마스트별 AS 건수
+                    st.subheader(f"{title_prefix}마스트별 AS 건수")
+                    mast_type_counts = filtered_df['마스트'].value_counts().head(15)
+                    
+                    if len(mast_type_counts) > 0:
+                        fig, ax = create_figure_with_korean(figsize=(10, 9), dpi=300)
+                        sns.barplot(x=mast_type_counts.index, y=mast_type_counts.values, ax=ax, palette=f"{current_theme}_r")
+                        
+                        # 막대 위에 텍스트 표시
+                        for i, v in enumerate(mast_type_counts.values):
+                            ax.text(i, v + max(mast_type_counts.values) * 0.02, str(v),
+                                  ha='center', fontsize=12)
+                            
+                        plt.tight_layout()
+                        st.pyplot(fig, use_container_width=True)
+                        
+                        # 다운로드 링크 추가
+                        st.markdown(get_image_download_link(fig, f'{title_prefix}마스트별_AS_건수.png', '마스트별 AS 건수 다운로드'), unsafe_allow_html=True)
+                    else:
+                        st.warning("마스트 데이터가 없습니다.")
+                
+                with col2:
+                    # 마스트별 고장유형 Top 10
+                    st.subheader(f"{title_prefix}마스트별 고장유형")
+                    
+                    # 마스트 선택
+                    mast_types = ["전체"] + filtered_df['마스트'].value_counts().index.tolist()
+                    selected_mast = st.selectbox("마스트", mast_types, key=f"mast_{maintenance_type}")
+                    
+                    if selected_mast != "전체":
+                        filtered_df_mast = filtered_df[filtered_df['마스트'] == selected_mast]
+                    else:
+                        filtered_df_mast = filtered_df
+                        
+                    if '고장유형' in filtered_df_mast.columns:
+                        top_faults_by_mast = filtered_df_mast['고장유형'].value_counts().head(10)
+                        
+                        fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+                        sns.barplot(x=top_faults_by_mast.values, y=top_faults_by_mast.index, ax=ax, palette=f"{current_theme}_r")
+                        
+                        # 막대 위에 텍스트 표시
+                        for i, v in enumerate(top_faults_by_mast.values):
+                            ax.text(v + max(top_faults_by_mast.values) * 0.002, i, str(v),
+                                  va='center', fontsize=12)
+                            
+                        plt.tight_layout()
+                        st.pyplot(fig, use_container_width=True)
+                        
+                        # 다운로드 링크 추가
+                        st.markdown(get_image_download_link(fig, f'{title_prefix}{selected_mast}_고장유형_TOP10.png', f'{selected_mast} 고장유형 TOP10 다운로드'), unsafe_allow_html=True)
+                    else:
+                        st.warning("고장유형 데이터가 없습니다.")
+            else:
+                st.warning("마스트 데이터가 없습니다.")
+                    
         # 상위 고장 유형 리스트
         st.subheader(f"{title_prefix}상위 고장 유형")
         top_40_faults = filtered_df['고장유형'].value_counts().nlargest(40)
@@ -1149,65 +1292,205 @@ def display_fault_analysis(df, maintenance_type=None):
         st.dataframe(fault_df)
     else:
         st.warning("고장 유형 분석에 필요한 컬럼(작업유형, 정비대상, 정비작업)이 데이터에 없습니다.")
-        if common_depts:
-            # 데이터 준비
-            dept_comparison = pd.DataFrame({
-                '소속': common_depts,
-                '인원수': [dept_staff.get(dept, 0) for dept in common_depts],
-                '수리건수': [repair_by_dept.get(dept, 0) for dept in common_depts]
-            })
-            
-            # 인원 대비 수리 건수 비율 계산
-            dept_comparison['인원당수리건수'] = (dept_comparison['수리건수'] / dept_comparison['인원수']).round(2)
-            dept_comparison = dept_comparison.sort_values('인원당수리건수', ascending=False).head(10)
-            
+
+# 정비내용 분석 함수
+def display_maintenance_text_analysis(df, maintenance_type=None):
+    # 데이터 필터링 (정비구분에 따라)
+    if maintenance_type and maintenance_type != "전체":
+        filtered_df = df[df['정비구분'] == maintenance_type]
+        title_prefix = f"{maintenance_type} "
+    else:
+        filtered_df = df
+        title_prefix = ""
+    
+    # 텍스트 데이터 확인
+    if '정비내용' in filtered_df.columns:
+        # 정비내용 데이터 준비
+        from kiwipiepy import Kiwi
+        kiwi = Kiwi()
+
+        text_data_raw = ' '.join(filtered_df['정비내용'].dropna().astype(str))
+
+        # 형태소 분석 + 명사 추출
+        tokens = kiwi.tokenize(text_data_raw)
+        nouns = [token.form for token in tokens if token.tag.startswith('N')]
+
+        stopwords = ["및", "있음", "없음", "함", "을", "후", "함", "접수", "취소", "확인", "위해", "통해", "오류", "완료", "작업", "실시", "진행", "수리", '정상작동', '정상작동확인', '조치완료']
+
+        # 불용어 제거
+        filtered_nouns = [word for word in nouns if word not in stopwords and len(word) > 1]
+
+        # 워드클라우드용 문자열 생성
+        text_data = ' '.join(filtered_nouns)
+
+        if not text_data:
+            st.warning(f"{title_prefix}정비내용 데이터가 없습니다.")
+        else:
+            # 그래프 행 1: 전체 워드클라우드와 분류별 워드클라우드
             col1, col2 = st.columns(2)
-            
+
             with col1:
-                # 소속별 인원 및 수리 건수 비교
-                fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                
-                x = np.arange(len(dept_comparison))
-                width = 0.4
-                
-                # 인원 수 (정규화)
-                max_staff = dept_comparison['인원수'].max()
-                max_repair = dept_comparison['수리건수'].max()
-                scale_factor = max_repair / max_staff if max_staff > 0 else 1
-                
-                ax.bar(x - width/2, dept_comparison['인원수'] * scale_factor, width, 
-                      label='인원수 (정규화)', color='#8ECAE6', alpha=0.7)
-                ax.bar(x + width/2, dept_comparison['수리건수'], width, 
-                      label='수리건수', color='#9370DB')
-                
-                # 축 설정
-                ax.set_xticks(x)
-                ax.set_xticklabels(dept_comparison['소속'], rotation=45, ha='right')
-                ax.legend()
-                
-                # 보조 y축 추가 (실제 인원수)
-                ax2 = ax.twinx()
-                ax2.set_ylim(0, max_staff * 1.1)
-                ax2.set_ylabel('실제 인원수')
-                
-                plt.tight_layout()
-                st.pyplot(fig, use_container_width=True)
-                st.markdown(get_image_download_link(fig, '소속별_인원수리건수_비교.png', '소속별 인원수리건수 비교 다운로드'), unsafe_allow_html=True)
-            
+                st.subheader(f"{title_prefix}정비내용 워드클라우드")
+
+                try:
+                    # 워드클라우드 생성
+                    wordcloud = WordCloud(
+                        width=1200, 
+                        height=800,
+                        background_color='white',
+                        font_path=font_path,
+                        colormap=current_theme,
+                        max_words=100,
+                        stopwords=set(stopwords),
+                        min_font_size=10,
+                        max_font_size=150,
+                        random_state=42
+                    ).generate(text_data)
+
+                    # 워드클라우드 시각화
+                    fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
+                    ax.imshow(wordcloud, interpolation='bilinear')
+                    ax.axis('off')
+                    plt.tight_layout()
+
+                    st.pyplot(fig, use_container_width=True)
+
+                    # 다운로드 링크 추가
+                    st.markdown(get_image_download_link(fig, f'{title_prefix}정비내용_워드클라우드.png', '정비내용 워드클라우드 다운로드'), unsafe_allow_html=True)
+                except Exception as e:
+                    st.error(f"워드클라우드 생성 중 오류가 발생했습니다: {e}")
+                    if "font_path" in str(e).lower():
+                        st.info("한글 폰트 경로를 확인해주세요.")
+
             with col2:
-                # 인원당 수리 건수
+                # 주요 단어 표시
+                word_freq = wordcloud.words_
+                top_words = dict(sorted(word_freq.items(), key=lambda x: x[1], reverse=True)[:30])
+
+                st.subheader(f"{title_prefix}주요 단어 Top 30")
+                word_df = pd.DataFrame({
+                    '단어': list(top_words.keys()),
+                    '가중치': list(top_words.values())
+                })
+
                 fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                sns.barplot(x=dept_comparison['인원당수리건수'], y=dept_comparison['소속'], ax=ax, palette="Purples_r")
-                
-                # 막대 위에 텍스트 표시
-                for i, v in enumerate(dept_comparison['인원당수리건수']):
-                    ax.text(v + 0.1, i, f"{v:.2f}", va='center')
-                
-                ax.set_xlabel('인원당 수리 건수')
+                sns.barplot(x=word_df['가중치'].head(20), y=word_df['단어'].head(20), ax=ax, palette=f"{current_theme}_r")
                 plt.tight_layout()
-                
+
                 st.pyplot(fig, use_container_width=True)
-                st.markdown(get_image_download_link(fig, '소속별_인원당수리건수.png', '소속별 인원당수리건수 다운로드'), unsafe_allow_html=True)
+
+                # 다운로드 링크 추가
+                st.markdown(get_image_download_link(fig, f'{title_prefix}주요단어_TOP30.png', '주요단어 TOP30 다운로드'), unsafe_allow_html=True)
+
+            # 분류별 정비내용 워드클라우드
+            st.subheader(f"{title_prefix}분류별 정비내용 워드클라우드")
+
+            if all(col in filtered_df.columns for col in ['작업유형', '정비대상', '정비작업', '정비내용']):
+                col1, col2, col3 = st.columns(3)
+
+                with col1:
+                    # 문자열 변환으로 정렬 오류 방지
+                    categories = ["전체"] + sorted(convert_to_str_list(filtered_df['작업유형'].dropna().unique()))
+                    selected_category = st.selectbox("작업유형", categories, key=f"text_cat_{maintenance_type}")
+
+                # 선택된 작업유형에 따라 데이터 필터링
+                if selected_category != "전체":
+                    text_filtered_df = filtered_df[filtered_df['작업유형'].astype(str) == selected_category]
+
+                    with col2:
+                        subcategories = ["전체"] + sorted(convert_to_str_list(text_filtered_df['정비대상'].dropna().unique()))
+                        selected_subcategory = st.selectbox("정비대상", subcategories, key=f"text_subcat_{maintenance_type}")
+
+                    # 선택된 정비대상에 따라 추가 필터링
+                    if selected_subcategory != "전체":
+                        text_filtered_df = text_filtered_df[text_filtered_df['정비대상'].astype(str) == selected_subcategory]
+
+                        with col3:
+                            detailed_categories = ["전체"] + sorted(convert_to_str_list(text_filtered_df['정비작업'].dropna().unique()))
+                            selected_detailed = st.selectbox("정비작업", detailed_categories, key=f"text_detail_{maintenance_type}")
+
+                        # 선택된 정비작업에 따라 최종 필터링
+                        if selected_detailed != "전체":
+                            text_filtered_df = text_filtered_df[text_filtered_df['정비작업'].astype(str) == selected_detailed]
+                    else:
+                        selected_detailed = "전체"
+                        with col3:
+                            st.selectbox("정비작업", ["전체"], key=f"text_detail_empty_{maintenance_type}")
+                else:
+                    text_filtered_df = filtered_df
+                    selected_subcategory = "전체"
+                    selected_detailed = "전체"
+
+                    with col2:
+                        st.selectbox("정비대상", ["전체"], key=f"text_subcat_empty_{maintenance_type}")
+
+                    with col3:
+                        st.selectbox("정비작업", ["전체"], key=f"text_detail_empty2_{maintenance_type}")
+
+                # 필터링된 정비내용 결합
+                filtered_text = ' '.join(text_filtered_df['정비내용'].dropna().astype(str))
+
+                if not filtered_text:
+                    st.warning(f"선택한 분류에 대한 {title_prefix}정비내용 데이터가 없습니다.")
+                else:
+                    st.write(f"선택: {selected_category} > {selected_subcategory} > {selected_detailed}")
+                    st.write(f"선택된 AS 건수: {len(text_filtered_df)}")
+
+                    col1, col2 = st.columns(2)
+
+                    with col1:
+                        try:
+                            # 워드클라우드 생성
+                            wordcloud = WordCloud(
+                                width=1200, 
+                                height=800,
+                                background_color='white',
+                                font_path=font_path,
+                                colormap=current_theme,
+                                max_words=100,
+                                stopwords=set(stopwords),
+                                min_font_size=10,
+                                max_font_size=150,
+                                random_state=42
+                            ).generate(filtered_text)
+
+                            # 워드클라우드 시각화
+                            fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
+                            ax.imshow(wordcloud, interpolation='bilinear')
+                            ax.axis('off')
+                            plt.tight_layout()
+
+                            st.pyplot(fig, use_container_width=True)
+
+                            # 다운로드 링크 추가
+                            st.markdown(get_image_download_link(fig, f'{title_prefix}{selected_category}_{selected_subcategory}_{selected_detailed}_워드클라우드.png', 
+                                    '분류별 워드클라우드 다운로드'), unsafe_allow_html=True)
+                        except Exception as e:
+                            st.error(f"워드클라우드 생성 중 오류가 발생했습니다: {e}")
+
+                    with col2:
+                        # 주요 단어 표시
+                        word_freq = wordcloud.words_
+                        top_words = dict(sorted(word_freq.items(), key=lambda x: x[1], reverse=True)[:30])
+
+                        word_df = pd.DataFrame({
+                            '단어': list(top_words.keys()),
+                            '가중치': list(top_words.values())
+                        })
+
+                        fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+                        sns.barplot(x=word_df['가중치'].head(20), y=word_df['단어'].head(20), ax=ax, palette=f"{current_theme}_r")
+                        plt.tight_layout()
+
+                        st.pyplot(fig, use_container_width=True)
+
+                        # 다운로드 링크 추가
+                        st.markdown(get_image_download_link(fig, f'{title_prefix}{selected_category}_{selected_subcategory}_{selected_detailed}_주요단어.png', 
+                                '분류별 주요단어 다운로드'), unsafe_allow_html=True)
+            else:
+                st.warning("분류별 분석에 필요한 컬럼이 데이터에 없습니다.")
+    else:
+        st.warning("정비내용 컬럼이 데이터에 없습니다.")
 
 # 데이터가 로드된 경우 분석 시작
 if df1 is not None or df3 is not None:
@@ -1234,7 +1517,7 @@ if df1 is not None or df3 is not None:
     # 현재 메뉴의 색상 테마 설정
     current_theme = color_themes[menu]
 
-    # 메뉴별 콘텐츠 표시 (if-elif 구조로 중복 코드 제거)
+    # 메뉴별 콘텐츠 표시
     if menu == "정비일지 대시보드":
         st.title("정비일지 대시보드")
 
@@ -1285,372 +1568,39 @@ if df1 is not None or df3 is not None:
     elif menu == "고장 유형 분석":
         st.title("고장 유형 분석")
 
-        # 정비구분 컬럼 확인 및 값 검증 - 내부/외부/전체 탭 추가
+        # 정비구분 컬럼 확인 및 값 검증
         if '정비구분' in df1.columns and df1['정비구분'].notna().any():
             # 실제 존재하는 정비구분 값 확인
             maintenance_types = df1['정비구분'].dropna().unique()
             has_internal = '내부' in maintenance_types
             has_external = '외부' in maintenance_types
-        # 필요한 컬럼 존재 여부 확인
-        if all(col in df1.columns for col in ['작업유형', '정비대상', '정비작업', '고장유형']):
 
             # 탭 생성
             tabs = st.tabs(["전체", "내부", "외부"])
-            # 탭 구조 정의
-            category_tabs = {
-                "작업유형": "작업유형",
-                "정비대상": "정비대상",
-                "정비작업": "정비작업"
-            }
-
-            tabs = st.tabs(list(category_tabs.keys()))
-
-            for tab, colname in zip(tabs, category_tabs.values()):
-                with tab:
-                    st.subheader(f"{colname}")
-                    category_counts = df1[colname].value_counts().head(15)
-                    category_values = convert_to_str_list(df1[colname].unique())
-                    selected_category = st.selectbox(f"{colname} 선택", ["전체"] + sorted(category_values), key=f"sel_{colname}")
-
-                    if selected_category != "전체":
-                        filtered_df = df1[df1[colname].astype(str) == selected_category]
-                    else:
-                        filtered_df = df1
-
-                    top_faults = filtered_df['고장유형'].value_counts().nlargest(15).index
-                    df_filtered = filtered_df[filtered_df['고장유형'].isin(top_faults)]
-                    top_combos = df_filtered['브랜드_모델'].value_counts().nlargest(15).index
-                    df_filtered = df_filtered[df_filtered['브랜드_모델'].isin(top_combos)]
-
-                    col1, col2, col3 = st.columns(3)
-
-                    with col1:
-                        st.markdown(f"**{colname} 분포**")
-                        fig1, ax1 = create_figure_with_korean(figsize=(8, 8), dpi=300)
-                        sns.barplot(x=category_counts.index, y=category_counts.values, ax=ax1, palette=f"{current_theme}_r")
-                        plt.xticks(rotation=45, ha='right')
-                        for i, v in enumerate(category_counts.values):
-                            ax1.text(i, v + max(category_counts.values) * 0.01, str(v), ha='center', fontsize=12)
-                        plt.tight_layout()
-                        st.pyplot(fig1, use_container_width=True)
-                        st.markdown(get_image_download_link(fig1, f'고장유형_{colname}_분포.png', f'{colname} 분포 다운로드'), unsafe_allow_html=True)
-
-                    with col2:
-                        st.markdown(f"**{colname}별 비율**")
-
-                        # 5% 미만은 기타로 그룹화
-                        category_counts_ratio = category_counts / category_counts.sum()
-                        small_categories = category_counts_ratio[category_counts_ratio < 0.05]
-                        if not small_categories.empty:
-                            others_sum = small_categories.sum() * category_counts.sum()
-                            category_counts = category_counts[category_counts_ratio >= 0.05]
-                            category_counts['기타'] = int(others_sum)
-
-                        fig2, ax2 = create_figure_with_korean(figsize=(8, 8), dpi=300)
-                        category_counts.plot(kind='pie', autopct='%1.1f%%', ax=ax2,
-                                             colors=sns.color_palette(current_theme, n_colors=len(category_counts)))
-                        ax2.set_ylabel('')
-                        plt.tight_layout()
-                        st.pyplot(fig2, use_container_width=True)
-                        st.markdown(get_image_download_link(fig2, f'고장유형_{colname}_비율.png', f'{colname} 비율 다운로드'), unsafe_allow_html=True)
-
-                    with col3:
-                        st.markdown(f"**{colname}에 따른 고장 증상**")
-                        try:
-                            pivot_df = df_filtered.pivot_table(
-                                index='고장유형',
-                                columns='브랜드_모델',
-                                aggfunc='size',
-                                fill_value=0
-                            )
-                            fig3, ax3 = create_figure_with_korean(figsize=(8, 8), dpi=300)
-                            sns.heatmap(pivot_df, cmap=current_theme, annot=True, fmt='d', linewidths=0.5, ax=ax3, cbar=False)
-                            plt.xticks(rotation=90)
-                            plt.yticks(rotation=0)
-                            plt.tight_layout()
-                            st.pyplot(fig3, use_container_width=True)
-                            st.markdown(get_image_download_link(fig3, f'고장유형_{colname}_히트맵.png', f'{colname} 히트맵 다운로드'), unsafe_allow_html=True)
-                        except Exception as e:
-                            st.error(f"히트맵 생성 중 오류가 발생했습니다: {e}")
-                            st.info("선택한 필터에 맞는 데이터가 충분하지 않을 수 있습니다.")
-
-            # 자재내역 분석 섹션 추가 - 자재내역 컬럼이 있는 경우만 표시
-            st.subheader("모델 타입 분석")
-
-            # 전체 탭
-            # 탭으로 분석 항목 구분
-            tabs = st.tabs(["연료", "운전방식", "적재용량", "마스트"])
             
-            # 연료별 분석
+            # 전체 탭
             with tabs[0]:
                 st.header("전체 고장 유형 분석")
                 display_fault_analysis(df1, None)
-                if '연료' in df1.columns:
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        # 연료별 AS 건수
-                        st.subheader("연료별 AS 건수")
-                        fuel_type_counts = df1['연료'].value_counts().dropna()
-                        
-                        if len(fuel_type_counts) > 0:
-                            fig, ax = create_figure_with_korean(figsize=(10, 9), dpi=300)
-                            sns.barplot(x=fuel_type_counts.index, y=fuel_type_counts.values, ax=ax, palette=f"{current_theme}_r")
-                            
-                            # 막대 위에 텍스트 표시
-                            for i, v in enumerate(fuel_type_counts.values):
-                                ax.text(i, v + max(fuel_type_counts.values) * 0.01, str(v),
-                                      ha='center', fontsize=12)
-                                
-                            plt.tight_layout()
-                            st.pyplot(fig, use_container_width=True)
-                            
-                            # 다운로드 링크 추가
-                            st.markdown(get_image_download_link(fig, '연료별_AS_건수.png', '연료별 AS 건수 다운로드'), unsafe_allow_html=True)
-                        else:
-                            st.warning("연료 데이터가 없습니다.")
-                    
-                    with col2:
-                        # 연료별 고장유형 Top 10
-                        st.subheader("연료별 고장유형")
-                        
-                        # 연료 선택
-                        fuel_types = ["전체"] + df1['연료'].value_counts().index.tolist()
-                        selected_fuel = st.selectbox("연료", fuel_types)
-                        
-                        if selected_fuel != "전체":
-                            filtered_df_fuel = df1[df1['연료'] == selected_fuel]
-                        else:
-                            filtered_df_fuel = df1
-                            
-                        if '고장유형' in filtered_df_fuel.columns:
-                            top_faults_by_fuel = filtered_df_fuel['고장유형'].value_counts().head(10)
-                            
-                            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                            sns.barplot(x=top_faults_by_fuel.values, y=top_faults_by_fuel.index, ax=ax, palette=f"{current_theme}_r")
-                            
-                            # 막대 위에 텍스트 표시
-                            for i, v in enumerate(top_faults_by_fuel.values):
-                                ax.text(v + max(top_faults_by_fuel.values) * 0.002, i, str(v),
-                                      va='center', fontsize=12)
-                                
-                            plt.tight_layout()
-                            st.pyplot(fig, use_container_width=True)
-                            
-                            # 다운로드 링크 추가
-                            st.markdown(get_image_download_link(fig, f'{selected_fuel}_고장유형_TOP10.png', f'{selected_fuel} 고장유형 TOP10 다운로드'), unsafe_allow_html=True)
-                        else:
-                            st.warning("고장유형 데이터가 없습니다.")
-                else:
-                    st.warning("연료 데이터가 없습니다.")
-
+                
             # 내부 탭
-            # 운전방식별 분석
             with tabs[1]:
                 st.header("내부 고장 유형 분석")
                 if has_internal:
                     display_fault_analysis(df1, "내부")
-                if '운전방식' in df1.columns:
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        # 운전방식별 AS 건수
-                        st.subheader("운전방식별 AS 건수")
-                        driving_type_counts = df1['운전방식'].value_counts().head(15)
-                        
-                        if len(driving_type_counts) > 0:
-                            fig, ax = create_figure_with_korean(figsize=(10, 9), dpi=300)
-                            sns.barplot(x=driving_type_counts.index, y=driving_type_counts.values, ax=ax, palette=f"{current_theme}_r")
-                            
-                            # 막대 위에 텍스트 표시
-                            for i, v in enumerate(driving_type_counts.values):
-                                ax.text(i, v + max(driving_type_counts.values) * 0.01, str(v),
-                                      ha='center', fontsize=12)
-                                
-                            plt.tight_layout()
-                            plt.xticks(rotation=45)
-                            st.pyplot(fig, use_container_width=True)
-                            
-                            # 다운로드 링크 추가
-                            st.markdown(get_image_download_link(fig, '운전방식별_AS_건수.png', '운전방식별 AS 건수 다운로드'), unsafe_allow_html=True)
-                        else:
-                            st.warning("운전방식 데이터가 없습니다.")
-                    
-                    with col2:
-                        # 운전방식별 고장유형 Top 10
-                        st.subheader("운전방식별 고장유형")
-                        
-                        # 운전방식 선택
-                        driving_types = ["전체"] + df1['운전방식'].value_counts().index.tolist()
-                        selected_driving = st.selectbox("운전방식", driving_types)
-                        
-                        if selected_driving != "전체":
-                            filtered_df_driving = df1[df1['운전방식'] == selected_driving]
-                        else:
-                            filtered_df_driving = df1
-                            
-                        if '고장유형' in filtered_df_driving.columns:
-                            top_faults_by_driving = filtered_df_driving['고장유형'].value_counts().head(10)
-                            
-                            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                            sns.barplot(x=top_faults_by_driving.values, y=top_faults_by_driving.index, ax=ax, palette=f"{current_theme}_r")
-                            
-                            # 막대 위에 텍스트 표시
-                            for i, v in enumerate(top_faults_by_driving.values):
-                                ax.text(v + max(top_faults_by_driving.values) * 0.002, i, str(v),
-                                      va='center', fontsize=12)
-                                
-                            plt.tight_layout()
-                            st.pyplot(fig, use_container_width=True)
-                            
-                            # 다운로드 링크 추가
-                            st.markdown(get_image_download_link(fig, f'{selected_driving}_고장유형_TOP10.png', f'{selected_driving} 고장유형 TOP10 다운로드'), unsafe_allow_html=True)
-                        else:
-                            st.warning("고장유형 데이터가 없습니다.")
                 else:
                     st.info("내부 정비 데이터가 없습니다.")
-            
+                
             # 외부 탭
-                    st.warning("운전방식 데이터가 없습니다.")
-
-            # 적재용량별 분석
             with tabs[2]:
                 st.header("외부 고장 유형 분석")
                 if has_external:
                     display_fault_analysis(df1, "외부")
-                if '적재용량' in df1.columns:
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        # 적재용량별 AS 건수
-                        st.subheader("적재용량별 AS 건수")
-                        load_capacity_counts = df1['적재용량'].value_counts().head(15)
-                        
-                        if len(load_capacity_counts) > 0:
-                            fig, ax = create_figure_with_korean(figsize=(10, 9), dpi=300)
-                            sns.barplot(x=load_capacity_counts.index, y=load_capacity_counts.values, ax=ax, palette=f"{current_theme}_r")
-                            
-                            # 막대 위에 텍스트 표시
-                            for i, v in enumerate(load_capacity_counts.values):
-                                ax.text(i, v + max(load_capacity_counts.values) * 0.02, str(v),
-                                      ha='center', fontsize=12)
-                                
-                            plt.tight_layout()
-                            st.pyplot(fig, use_container_width=True)
-                            
-                            # 다운로드 링크 추가
-                            st.markdown(get_image_download_link(fig, '적재용량별_AS_건수.png', '적재용량별 AS 건수 다운로드'), unsafe_allow_html=True)
-                        else:
-                            st.warning("적재용량 데이터가 없습니다.")
-                    
-                    with col2:
-                        # 적재용량별 고장유형 Top 10
-                        st.subheader("적재용량별 고장유형")
-                        
-                        # 적재용량 선택
-                        load_capacities = ["전체"] + df1['적재용량'].value_counts().index.tolist()
-                        selected_capacity = st.selectbox("적재용량", load_capacities)
-                        
-                        if selected_capacity != "전체":
-                            filtered_df_capacity = df1[df1['적재용량'] == selected_capacity]
-                        else:
-                            filtered_df_capacity = df1
-                            
-                        if '고장유형' in filtered_df_capacity.columns:
-                            top_faults_by_capacity = filtered_df_capacity['고장유형'].value_counts().head(10)
-                            
-                            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                            sns.barplot(x=top_faults_by_capacity.values, y=top_faults_by_capacity.index, ax=ax, palette=f"{current_theme}_r")
-                            
-                            # 막대 위에 텍스트 표시
-                            for i, v in enumerate(top_faults_by_capacity.values):
-                                ax.text(v + max(top_faults_by_capacity.values) * 0.002, i, str(v),
-                                      va='center', fontsize=12)
-                                
-                            plt.tight_layout()
-                            st.pyplot(fig, use_container_width=True)
-                            
-                            # 다운로드 링크 추가
-                            st.markdown(get_image_download_link(fig, f'{selected_capacity}_고장유형_TOP10.png', f'{selected_capacity} 고장유형 TOP10 다운로드'), unsafe_allow_html=True)
-                        else:
-                            st.warning("고장유형 데이터가 없습니다.")
                 else:
                     st.info("외부 정비 데이터가 없습니다.")
-                    st.warning("적재용량 데이터가 없습니다.")
-
-            # 마스트별 분석
-            with tabs[3]:
-                if '마스트' in df1.columns:
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        # 마스트별 AS 건수
-                        st.subheader("마스트별 AS 건수")
-                        mast_type_counts = df1['마스트'].value_counts().head(15)
-                        
-                        if len(mast_type_counts) > 0:
-                            fig, ax = create_figure_with_korean(figsize=(10, 9), dpi=300)
-                            sns.barplot(x=mast_type_counts.index, y=mast_type_counts.values, ax=ax, palette=f"{current_theme}_r")
-                            
-                            # 막대 위에 텍스트 표시
-                            for i, v in enumerate(mast_type_counts.values):
-                                ax.text(i, v + max(mast_type_counts.values) * 0.02, str(v),
-                                      ha='center', fontsize=12)
-                                
-                            plt.tight_layout()
-                            st.pyplot(fig, use_container_width=True)
-                            
-                            # 다운로드 링크 추가
-                            st.markdown(get_image_download_link(fig, '마스트별_AS_건수.png', '마스트별 AS 건수 다운로드'), unsafe_allow_html=True)
-                        else:
-                            st.warning("마스트 데이터가 없습니다.")
-                    
-                    with col2:
-                        # 마스트별 고장유형 Top 10
-                        st.subheader("마스트별 고장유형")
-                        
-                        # 마스트 선택
-                        mast_types = ["전체"] + df1['마스트'].value_counts().index.tolist()
-                        selected_mast = st.selectbox("마스트", mast_types)
-                        
-                        if selected_mast != "전체":
-                            filtered_df_mast = df1[df1['마스트'] == selected_mast]
-                        else:
-                            filtered_df_mast = df1
-                            
-                        if '고장유형' in filtered_df_mast.columns:
-                            top_faults_by_mast = filtered_df_mast['고장유형'].value_counts().head(10)
-                            
-                            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                            sns.barplot(x=top_faults_by_mast.values, y=top_faults_by_mast.index, ax=ax, palette=f"{current_theme}_r")
-                            
-                            # 막대 위에 텍스트 표시
-                            for i, v in enumerate(top_faults_by_mast.values):
-                                ax.text(v + max(top_faults_by_mast.values) * 0.002, i, str(v),
-                                      va='center', fontsize=12)
-                                
-                            plt.tight_layout()
-                            st.pyplot(fig, use_container_width=True)
-                            
-                            # 다운로드 링크 추가
-                            st.markdown(get_image_download_link(fig, f'{selected_mast}_고장유형_TOP10.png', f'{selected_mast} 고장유형 TOP10 다운로드'), unsafe_allow_html=True)
-                        else:
-                            st.warning("고장유형 데이터가 없습니다.")
-                else:
-                    st.warning("마스트 데이터가 없습니다.")
-                    
-            # 상위 고장 유형 리스트
-            st.subheader("상위 고장 유형")
-            top_40_faults = filtered_df['고장유형'].value_counts().nlargest(40)
-            fault_df = pd.DataFrame({
-                '고장유형': top_40_faults.index,
-                '건수': top_40_faults.values
-            })
-            st.dataframe(fault_df)
         else:
             # 정비구분 컬럼이 없는 경우 전체 데이터만
             display_fault_analysis(df1, None)
-            st.warning("고장 유형 분석에 필요한 컬럼(작업유형, 정비대상, 정비작업)이 데이터에 없습니다.")
 
     elif menu == "브랜드/모델 분석":
         st.title("브랜드 및 모델 분석")
@@ -1836,7 +1786,7 @@ if df1 is not None or df3 is not None:
             brand_title = "전체 "
 
         # 모델별 AS 건수 및 비율
-        model_counts = brand_df['모델명'].value_counts().head(15)  # 상위 10개만 (가독성)
+        model_counts = brand_df['모델명'].value_counts().head(15)  # 상위 15개만 (가독성)
         model_as_ratio = (model_counts / brand_total_as * 100).round(1)
 
         # 모델별 분석 그래프 (2개 그래프 나란히 배치)
@@ -2138,237 +2088,44 @@ if df1 is not None or df3 is not None:
 
     elif menu == "정비내용 분석":
         st.title("정비내용 분석")
-
-    # 정비내용 분석 함수 추가
-    def display_maintenance_text_analysis(df, maintenance_type=None):
-        # 데이터 필터링 (정비구분에 따라)
-        if maintenance_type and maintenance_type != "전체":
-            filtered_df = df[df['정비구분'] == maintenance_type]
-            title_prefix = f"{maintenance_type} "
-        else:
-            filtered_df = df
-            title_prefix = ""
-    
-        # 텍스트 데이터 확인
-        if '정비내용' in df1.columns:
-        if '정비내용' in filtered_df.columns:
-            # 정비내용 데이터 준비
-
-            from kiwipiepy import Kiwi
-            kiwi = Kiwi()
-
-            text_data_raw = ' '.join(df1['정비내용'].dropna().astype(str))
-            text_data_raw = ' '.join(filtered_df['정비내용'].dropna().astype(str))
-
-            # 형태소 분석 + 명사 추출
-            tokens = kiwi.tokenize(text_data_raw)
-            nouns = [token.form for token in tokens if token.tag.startswith('N')]
-
-            stopwords = ["및", "있음", "없음", "함", "을", "후", "함", "접수", "취소", "확인", "위해", "통해", "오류", "완료", "작업", "실시", "진행", "수리", '정상작동', '정상작동확인', '조치완료']
-
-            # 불용어 제거
-            filtered_nouns = [word for word in nouns if word not in stopwords and len(word) > 1]
-
-            # 워드클라우드용 문자열 생성
-            text_data = ' '.join(filtered_nouns)
-
-            if not text_data:
-                st.warning("정비내용 데이터가 없습니다.")
-                st.warning(f"{title_prefix}정비내용 데이터가 없습니다.")
-            else:
-                # 그래프 행 1: 전체 워드클라우드와 분류별 워드클라우드
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    st.subheader("전체 정비내용 워드클라우드")
-                    st.subheader(f"{title_prefix}정비내용 워드클라우드")
-
-                    try:
-                        # 워드클라우드 생성 (font_path 사용하지 않음)
-                        wordcloud = WordCloud(
-                            width=1200, 
-                            height=800,
-                            background_color='white',
-                            font_path=font_path,  
-                            colormap=current_theme,
-                            max_words=100,
-                            stopwords=set(stopwords),
-                            min_font_size=10,
-                            max_font_size=150,
-                            random_state=42
-                        ).generate(text_data)
-
-                        # 워드클라우드 시각화
-                        fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
-                        ax.imshow(wordcloud, interpolation='bilinear')
-                        ax.axis('off')
-                        plt.tight_layout()
-
-                        st.pyplot(fig, use_container_width=True)
-
-                        # 다운로드 링크 추가
-                        st.markdown(get_image_download_link(fig, '정비내용_워드클라우드.png', '정비내용 워드클라우드 다운로드'), unsafe_allow_html=True)
-                        st.markdown(get_image_download_link(fig, f'{title_prefix}정비내용_워드클라우드.png', '정비내용 워드클라우드 다운로드'), unsafe_allow_html=True)
-                    except Exception as e:
-                        st.error(f"워드클라우드 생성 중 오류가 발생했습니다: {e}")
-                        if "font_path" in str(e).lower():
-                            st.info("한글 폰트 경로를 확인해주세요.")
-
-                with col2:
-                    # 주요 단어 표시
-                    word_freq = wordcloud.words_
-                    top_words = dict(sorted(word_freq.items(), key=lambda x: x[1], reverse=True)[:30])
-
-                    st.subheader("주요 단어 Top 30")
-                    st.subheader(f"{title_prefix}주요 단어 Top 30")
-                    word_df = pd.DataFrame({
-                        '단어': list(top_words.keys()),
-                        '가중치': list(top_words.values())
-                    })
-
-                    fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                    sns.barplot(x=word_df['가중치'].head(20), y=word_df['단어'].head(20), ax=ax, palette=f"{current_theme}_r")
-                    plt.tight_layout()
-
-                    st.pyplot(fig, use_container_width=True)
-
-                    # 다운로드 링크 추가
-                    st.markdown(get_image_download_link(fig, '주요단어_TOP30.png', '주요단어 TOP30 다운로드'), unsafe_allow_html=True)
-                    st.markdown(get_image_download_link(fig, f'{title_prefix}주요단어_TOP30.png', '주요단어 TOP30 다운로드'), unsafe_allow_html=True)
-
-                # 분류별 정비내용 워드클라우드
-                st.subheader("분류별 정비내용 워드클라우드")
-                st.subheader(f"{title_prefix}분류별 정비내용 워드클라우드")
-
-                if all(col in df1.columns for col in ['작업유형', '정비대상', '정비작업', '정비내용']):
-                if all(col in filtered_df.columns for col in ['작업유형', '정비대상', '정비작업', '정비내용']):
-                    col1, col2, col3 = st.columns(3)
-
-                    with col1:
-                        # 문자열 변환으로 정렬 오류 방지
-                        categories = ["전체"] + sorted(convert_to_str_list(df1['작업유형'].dropna().unique()))
-                        selected_category = st.selectbox("작업유형", categories)
-                        categories = ["전체"] + sorted(convert_to_str_list(filtered_df['작업유형'].dropna().unique()))
-                        selected_category = st.selectbox("작업유형", categories, key=f"text_cat_{maintenance_type}")
-
-                    # 선택된 작업유형에 따라 데이터 필터링
-                    if selected_category != "전체":
-                        filtered_df = df1[df1['작업유형'].astype(str) == selected_category]
-                        text_filtered_df = filtered_df[filtered_df['작업유형'].astype(str) == selected_category]
-
-                        with col2:
-                            subcategories = ["전체"] + sorted(convert_to_str_list(filtered_df['정비대상'].dropna().unique()))
-                            selected_subcategory = st.selectbox("정비대상", subcategories)
-                            subcategories = ["전체"] + sorted(convert_to_str_list(text_filtered_df['정비대상'].dropna().unique()))
-                            selected_subcategory = st.selectbox("정비대상", subcategories, key=f"text_subcat_{maintenance_type}")
-
-                        # 선택된 정비대상에 따라 추가 필터링
-                        if selected_subcategory != "전체":
-                            filtered_df = filtered_df[filtered_df['정비대상'].astype(str) == selected_subcategory]
-                            text_filtered_df = text_filtered_df[text_filtered_df['정비대상'].astype(str) == selected_subcategory]
-
-                            with col3:
-                                detailed_categories = ["전체"] + sorted(convert_to_str_list(filtered_df['정비작업'].dropna().unique()))
-                                selected_detailed = st.selectbox("정비작업", detailed_categories)
-                                detailed_categories = ["전체"] + sorted(convert_to_str_list(text_filtered_df['정비작업'].dropna().unique()))
-                                selected_detailed = st.selectbox("정비작업", detailed_categories, key=f"text_detail_{maintenance_type}")
-
-                            # 선택된 정비작업에 따라 최종 필터링
-                            if selected_detailed != "전체":
-                                filtered_df = filtered_df[filtered_df['정비작업'].astype(str) == selected_detailed]
-                                text_filtered_df = text_filtered_df[text_filtered_df['정비작업'].astype(str) == selected_detailed]
-                        else:
-                            selected_detailed = "전체"
-                            with col3:
-                                st.selectbox("정비작업", ["전체"])
-                                st.selectbox("정비작업", ["전체"], key=f"text_detail_empty_{maintenance_type}")
-                    else:
-                        filtered_df = df1
-                        text_filtered_df = filtered_df
-                        selected_subcategory = "전체"
-                        selected_detailed = "전체"
-
-                        with col2:
-                            st.selectbox("정비대상", ["전체"])
-                            st.selectbox("정비대상", ["전체"], key=f"text_subcat_empty_{maintenance_type}")
-
-                        with col3:
-                            st.selectbox("정비작업", ["전체"])
-                            st.selectbox("정비작업", ["전체"], key=f"text_detail_empty2_{maintenance_type}")
-
-                    # 필터링된 정비내용 결합
-                    filtered_text = ' '.join(filtered_df['정비내용'].dropna().astype(str))
-                    filtered_text = ' '.join(text_filtered_df['정비내용'].dropna().astype(str))
-
-                    if not filtered_text:
-                        st.warning("선택한 분류에 대한 정비내용 데이터가 없습니다.")
-                        st.warning(f"선택한 분류에 대한 {title_prefix}정비내용 데이터가 없습니다.")
-                    else:
-                        st.write(f"선택: {selected_category} > {selected_subcategory} > {selected_detailed}")
-                        st.write(f"선택된 AS 건수: {len(filtered_df)}")
-                        st.write(f"선택된 AS 건수: {len(text_filtered_df)}")
-
-                        col1, col2 = st.columns(2)
-
-                        with col1:
-                            try:
-                                # 워드클라우드 생성 (font_path 사용하지 않음)
-                                wordcloud = WordCloud(
-                                    width=1200, 
-                                    height=800,
-                                    background_color='white',
-                                    font_path=font_path,  # 다운로드한 폰트 경로 사용
-                                    font_path=font_path,
-                                    colormap=current_theme,
-                                    max_words=100,
-                                    stopwords=set(stopwords),
-                                    min_font_size=10,
-                                    max_font_size=150,
-                                    random_state=42
-                                ).generate(filtered_text)
-
-                                # 워드클라우드 시각화
-                                fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
-                                ax.imshow(wordcloud, interpolation='bilinear')
-                                ax.axis('off')
-                                plt.tight_layout()
-
-                                st.pyplot(fig, use_container_width=True)
-
-                                # 다운로드 링크 추가
-                                st.markdown(get_image_download_link(fig, f'{selected_category}_{selected_subcategory}_{selected_detailed}_워드클라우드.png', 
-                                           '분류별 워드클라우드 다운로드'), unsafe_allow_html=True)
-                                st.markdown(get_image_download_link(fig, f'{title_prefix}{selected_category}_{selected_subcategory}_{selected_detailed}_워드클라우드.png', 
-                                        '분류별 워드클라우드 다운로드'), unsafe_allow_html=True)
-                            except Exception as e:
-                                st.error(f"워드클라우드 생성 중 오류가 발생했습니다: {e}")
-
-                        with col2:
-                            # 주요 단어 표시
-                            word_freq = wordcloud.words_
-                            top_words = dict(sorted(word_freq.items(), key=lambda x: x[1], reverse=True)[:30])
-
-                            word_df = pd.DataFrame({
-                                '단어': list(top_words.keys()),
-                                '가중치': list(top_words.values())
-                            })
-
-                            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                            sns.barplot(x=word_df['가중치'].head(20), y=word_df['단어'].head(20), ax=ax, palette=f"{current_theme}_r")
-                            plt.tight_layout()
-
-                            st.pyplot(fig, use_container_width=True)
-
-                            # 다운로드 링크 추가
-                            st.markdown(get_image_download_link(fig, f'{selected_category}_{selected_subcategory}_{selected_detailed}_주요단어.png', 
-                                       '분류별 주요단어 다운로드'), unsafe_allow_html=True)
-                            st.markdown(get_image_download_link(fig, f'{title_prefix}{selected_category}_{selected_subcategory}_{selected_detailed}_주요단어.png', 
-                                    '분류별 주요단어 다운로드'), unsafe_allow_html=True)
+        
+        # 정비구분 컬럼 확인 및 값 검증
+        if '정비구분' in df1.columns and df1['정비구분'].notna().any():
+            # 실제 존재하는 정비구분 값 확인
+            maintenance_types = df1['정비구분'].dropna().unique()
+            
+            # 내부, 외부 값이 있는지 확인
+            has_internal = '내부' in maintenance_types
+            has_external = '외부' in maintenance_types
+            
+            # 탭 생성
+            tabs = st.tabs(["전체", "내부", "외부"])
+            
+            # 전체 탭
+            with tabs[0]:
+                st.header("전체 정비 내용 분석")
+                display_maintenance_text_analysis(df1, None)
+                
+            # 내부 탭
+            with tabs[1]:
+                st.header("내부 정비 내용 분석")
+                if has_internal:
+                    df_internal = df1[df1['정비구분'] == '내부']
+                    display_maintenance_text_analysis(df_internal, "내부")
                 else:
-                    st.warning("분류별 분석에 필요한 컬럼이 데이터에 없습니다.")
+                    st.info("내부 정비 데이터가 없습니다.")
+                    
+            # 외부 탭
+            with tabs[2]:
+                st.header("외부 정비 내용 분석")
+                if has_external:
+                    df_external = df1[df1['정비구분'] == '외부']
+                    display_maintenance_text_analysis(df_external, "외부")
+                else:
+                    st.info("외부 정비 데이터가 없습니다.")
         else:
-            st.warning("정비내용 컬럼이 데이터에 없습니다.")
-
+            # 정비구분 컬럼이 없는 경우 전체 데이터만 표시
+            display_maintenance_text_analysis(df1, None)
 
     elif menu == "고장 예측":
         st.title("고장 예측")
@@ -2498,7 +2255,7 @@ if df1 is not None or df3 is not None:
                 id_placeholder = f"예: {existing_ids[0]}" if len(existing_ids) > 0 else ""
                 input_id = st.text_input("관리번호(직접 입력)", placeholder=id_placeholder).strip()
                 # 선택된 ID 또는 입력된 ID 사용
-                final_id = selected_id if selected_id else input_id
+                final_id = selected_id if selected_id != "전체" else input_id
 
             with col5:
                 if '제조년도' in filtered_df.columns:
@@ -2516,14 +2273,6 @@ if df1 is not None or df3 is not None:
                     selected_year_range = st.selectbox("제조년도(선택)", year_ranges, index=0)
                 else:
                     selected_year_range = "전체"
-
-
-            # 브랜드 + 모델 기준 1차 필터링
-            filtered_df = df1[(df1['브랜드'] == selected_brand) & (df1['모델명'] == selected_model)]
-
-            # 관리번호 추가 필터링
-            if selected_id != "전체":
-                filtered_df = filtered_df[filtered_df['관리번호'] == selected_id]
 
             # 제조년도 범위로 필터링 (정의된 구간 내 값만)
             if selected_year_range != "전체":

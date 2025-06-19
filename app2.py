@@ -1935,11 +1935,13 @@ if df1 is not None or df3 is not None:
                     # 필수 컬럼 체크
                     required_cols = ['브랜드', '모델명', '작업유형', '정비대상', '정비작업', '제조년도']
                     if not all(col in df.columns for col in required_cols):
+                        st.warning(f"필수 컬럼이 없습니다: {[col for col in required_cols if col not in df.columns]}")
                         return [None] * 10
 
                     model_df = df.dropna(subset=required_cols[:-1]).copy()  # 제조년도는 후처리로
 
                     if len(model_df) < 100:
+                        st.warning(f"학습 데이터가 부족합니다: {len(model_df)}개 (최소 100개 필요)")
                         return [None] * 10
 
                     # 범주형 인코딩
@@ -1962,6 +1964,8 @@ if df1 is not None or df3 is not None:
                         model_df['제조년도_정수'] = model_df['제조년도_정수'].fillna(mode_year)
 
                     def year_to_range(year):
+                        if pd.isna(year):
+                            return "정보없음"
                         if year <= 2005:
                             return "2005이하"
                         elif year <= 2010:
@@ -1981,7 +1985,12 @@ if df1 is not None or df3 is not None:
                     features = ['브랜드_인코딩', '모델_인코딩', '작업유형_인코딩', '정비대상_인코딩', '정비작업_인코딩', '제조년도_구간_인코딩']
 
                     # 타겟
-                    model_df['재정비간격_타겟'] = model_df['재정비간격'].fillna(365).clip(0, 365)
+                    if '재정비간격' in model_df.columns:
+                        model_df['재정비간격_타겟'] = model_df['재정비간격'].fillna(365).clip(0, 365)
+                    else:
+                        # 재정비간격 컬럼이 없는 경우 기본값 추가
+                        model_df['재정비간격_타겟'] = 180  # 기본 6개월로 가정
+                    
                     X = model_df[features]
                     y_interval = model_df['재정비간격_타겟']
 
@@ -2006,14 +2015,27 @@ if df1 is not None or df3 is not None:
                     )
 
                 except Exception as e:
-                    st.error(f"모델 준비 중 오류 발생: {e}")
+                    st.error(f"모델 준비 중 오류 발생: {str(e)}")
+                    import traceback
+                    st.error(traceback.format_exc())
                     return [None] * 10
         
             # 모델 준비 (백그라운드에서 실행)
-            interval_model, category_model, subcategory_model, detail_model, le_brand, le_model, le_category, le_subcategory, le_detail, le_year_range = prepare_prediction_model(df1)
+            models = prepare_prediction_model(df1)
+            interval_model, category_model, subcategory_model, detail_model, le_brand, le_model, le_category, le_subcategory, le_detail, le_year_range = models
             
-            if interval_model is not None:
+            # 모델이 준비되었는지 확인
+            models_ready = all(model is not None for model in models)
+            
+            if models_ready:
                 st.info("다음 고장 시기 예측과 확률이 높은 고장 유형을 예측합니다.")
+            else:
+                st.warning("""
+                예측 모델을 준비할 수 없습니다. 다음 사항을 확인해주세요:
+                1. 충분한 데이터(최소 100개 이상의 기록)가 있는지 확인
+                2. 필요한 컬럼(브랜드, 모델명, 작업유형, 정비대상, 정비작업)이 모두 있는지 확인
+                3. 재정비 간격 정보가 있는지 확인
+                """)
                 
             col1, col2, col3, col4, col5 = st.columns(5)
 
@@ -2044,75 +2066,117 @@ if df1 is not None or df3 is not None:
 
             if not filtered_df.empty:
                 with col3:
-                    existing_ids = filtered_df['관리번호'].dropna().unique()
-                    selected_id = st.selectbox("관리번호(선택)", ["전체"] + list(existing_ids), index=0)
+                    if '관리번호' in filtered_df.columns:
+                        existing_ids = filtered_df['관리번호'].dropna().unique()
+                        if len(existing_ids) > 0:
+                            selected_id = st.selectbox("관리번호(선택)", ["전체"] + list(existing_ids), index=0)
+                        else:
+                            selected_id = "전체"
+                    else:
+                        selected_id = "전체"
+                        st.text("관리번호 정보 없음")
 
                     if selected_id != "전체":
                         filtered_df = filtered_df[filtered_df['관리번호'] == selected_id]
                 
                 with col4:
-                    id_placeholder = f"예: {existing_ids[0]}" if len(existing_ids) > 0 else ""
-                    input_id = st.text_input("관리번호(직접 입력)", placeholder=id_placeholder).strip()
-                    # 선택된 ID 또는 입력된 ID 사용
-                    final_id = selected_id if selected_id else input_id
+                    if '관리번호' in filtered_df.columns and len(filtered_df['관리번호'].dropna()) > 0:
+                        id_placeholder = f"예: {filtered_df['관리번호'].dropna().iloc[0]}" if not filtered_df['관리번호'].dropna().empty else ""
+                        input_id = st.text_input("관리번호(직접 입력)", placeholder=id_placeholder).strip()
+                        # 선택된 ID 또는 입력된 ID 사용
+                        final_id = selected_id if selected_id != "전체" else input_id
+                    else:
+                        st.text("관리번호 정보 없음")
+                        final_id = ""
         
                 with col5:
-                    if '제조년도' in filtered_df.columns:
-                        years = filtered_df['제조년도'].dropna().astype(int)
+                    if '제조년도' in filtered_df.columns and not filtered_df['제조년도'].dropna().empty:
+                        try:
+                            years = pd.to_numeric(filtered_df['제조년도'].dropna(), errors='coerce')
+                            years = years[~pd.isna(years)].astype(int)
+                            
+                            def year_to_range(year):
+                                if year <= 2005: return "2005년 이하"
+                                elif year <= 2010: return "2006-2010"
+                                elif year <= 2015: return "2011-2015"
+                                elif year <= 2020: return "2016-2020"
+                                else: return "2021-2025"
 
-                        def year_to_range(year):
-                            if year <= 2005: return "2005년 이하"
-                            elif year <= 2010: return "2006-2010"
-                            elif year <= 2015: return "2011-2015"
-                            elif year <= 2020: return "2016-2020"
-                            else: return "2021-2025"
-
-                        year_ranges = sorted(set(year_to_range(y) for y in years))
-                        year_ranges = ["전체"] + year_ranges  # "전체" 옵션 추가
-                        selected_year_range = st.selectbox("제조년도(선택)", year_ranges, index=0)
+                            if len(years) > 0:
+                                year_ranges = sorted(set(year_to_range(y) for y in years))
+                                year_ranges = ["전체"] + year_ranges  # "전체" 옵션 추가
+                                selected_year_range = st.selectbox("제조년도(선택)", year_ranges, index=0)
+                            else:
+                                selected_year_range = "전체"
+                                st.text("제조년도 정보 부족")
+                        except:
+                            selected_year_range = "전체"
+                            st.text("제조년도 형식 오류")
                     else:
                         selected_year_range = "전체"
-
+                        st.text("제조년도 정보 없음")
 
                 # 브랜드 + 모델 기준 1차 필터링
                 filtered_df = df1[(df1['브랜드'] == selected_brand) & (df1['모델명'] == selected_model)]
 
                 # 관리번호 추가 필터링
-                if selected_id != "전체":
+                if '관리번호' in filtered_df.columns and selected_id != "전체":
                     filtered_df = filtered_df[filtered_df['관리번호'] == selected_id]
 
                 # 제조년도 범위로 필터링 (정의된 구간 내 값만)
-                if selected_year_range != "전체":
-                    def year_in_range(year):
-                        if selected_year_range == "2005년 이하": return year <= 2005
-                        elif selected_year_range == "2006-2010": return 2006 <= year <= 2010
-                        elif selected_year_range == "2011-2015": return 2011 <= year <= 2015
-                        elif selected_year_range == "2016-2020": return 2016 <= year <= 2020
-                        elif selected_year_range == "2021-2025": return 2021 <= year <= 2025
-                        return False
+                if '제조년도' in filtered_df.columns and selected_year_range != "전체":
+                    def year_in_range(year_str):
+                        try:
+                            year = int(float(year_str))
+                            if selected_year_range == "2005년 이하": return year <= 2005
+                            elif selected_year_range == "2006-2010": return 2006 <= year <= 2010
+                            elif selected_year_range == "2011-2015": return 2011 <= year <= 2015
+                            elif selected_year_range == "2016-2020": return 2016 <= year <= 2020
+                            elif selected_year_range == "2021-2025": return 2021 <= year <= 2025
+                            return False
+                        except:
+                            return False
 
-                    filtered_df = filtered_df[filtered_df['제조년도'].dropna().astype(int).apply(year_in_range)]
+                    filtered_df = filtered_df[filtered_df['제조년도'].astype(str).apply(year_in_range)]
 
                 if len(filtered_df) > 0:
-                    latest_record = filtered_df.sort_values('정비일자', ascending=False).iloc[0]
+                    # 정비일자 열이 있는지 확인하고 오류 처리 추가
+                    if '정비일자' in filtered_df.columns:
+                        try:
+                            latest_record = filtered_df.sort_values('정비일자', ascending=False).iloc[0]
 
-                    # 최근 정비 내용 표시
-                    st.subheader("장비 최근 정비 정보")
-                    col1, col2 = st.columns(2)
+                            # 최근 정비 내용 표시
+                            st.subheader("장비 최근 정비 정보")
+                            col1, col2 = st.columns(2)
 
-                    with col1:
-                        st.write(f"**최근 정비일:** {latest_record['정비일자'].strftime('%Y-%m-%d')}")
-                        st.write(f"**고장 유형:** {latest_record['작업유형']} > {latest_record['정비대상']} > {latest_record['정비작업']}")
-                        st.write(f"**종류:** {latest_record.get('자재내역', '정보 없음')}")
-                        st.write(f"**정비사:** {latest_record.get('정비자', '정보 없음')}")
+                            with col1:
+                                if pd.notna(latest_record.get('정비일자')):
+                                    if isinstance(latest_record['정비일자'], str):
+                                        st.write(f"**최근 정비일:** {latest_record['정비일자']}")
+                                    else:
+                                        st.write(f"**최근 정비일:** {latest_record['정비일자'].strftime('%Y-%m-%d')}")
+                                else:
+                                    st.write("**최근 정비일:** 정보 없음")
+                                    
+                                st.write(f"**고장 유형:** {latest_record['작업유형']} > {latest_record['정비대상']} > {latest_record['정비작업']}")
+                                st.write(f"**종류:** {latest_record.get('자재내역', '정보 없음')}")
+                                st.write(f"**정비사:** {latest_record.get('정비자', '정보 없음')}")
 
-                    with col2:
-                        st.write(f"**이전 정비일:** {latest_record.get('최근정비일자', '정보 없음')}")
-                        st.write(f"**정비 내용:** {latest_record.get('정비내용', '정보 없음')}")
-                        st.write(f"**현장명:** {latest_record.get('현장명', '정보 없음')}")
+                            with col2:
+                                st.write(f"**이전 정비일:** {latest_record.get('최근정비일자', '정보 없음')}")
+                                st.write(f"**정비 내용:** {latest_record.get('정비내용', '정보 없음')}")
+                                st.write(f"**현장명:** {latest_record.get('현장명', '정보 없음')}")
+                        except Exception as e:
+                            st.error(f"최근 정비 정보 표시 중 오류 발생: {e}")
+                    else:
+                        st.warning("정비일자 정보가 없어 최근 정비 내용을 표시할 수 없습니다.")
             
                 # 예측 실행
                 if st.button("고장 예측 실행"):
+                    if not models_ready:
+                        st.error("예측 모델이 준비되지 않았습니다. 데이터를 확인하세요.")
+                        st.stop()
+                        
                     with st.spinner("예측 분석 중..."):
                         try:
                             # 선택한 값을 인코딩
@@ -2120,22 +2184,50 @@ if df1 is not None or df3 is not None:
                             model_code = le_model.transform([selected_model])[0]
 
                             # 최근 정비 데이터 가져오기
-                            latest_data = df1[(df1['브랜드'] == selected_brand) & (df1['모델명'] == selected_model)] \
-                                .sort_values('정비일자', ascending=False).iloc[0]
+                            latest_data = filtered_df.sort_values('정비일자', ascending=False).iloc[0]
 
                             category_code = le_category.transform([latest_data['작업유형']])[0]
                             subcat_code = le_subcategory.transform([latest_data['정비대상']])[0]
                             detail_code = le_detail.transform([latest_data['정비작업']])[0]
 
-                            # 제조년도 구간 → 인코딩
-                            if selected_year_range == "전체":
-                                mode_range = df1['제조년도'].dropna().astype(int).apply(year_to_range).mode().iloc[0]
+                            # 제조년도 구간 처리
+                            def prep_year_range(year_str):
+                                try:
+                                    year = int(float(year_str))
+                                    if year <= 2005: return "2005이하"
+                                    elif year <= 2010: return "2006-2010"
+                                    elif year <= 2015: return "2011-2015"
+                                    elif year <= 2020: return "2016-2020"
+                                    else: return "2021-2025"
+                                except:
+                                    return "2011-2015"  # 기본값
+                                    
+                            if selected_year_range == "전체" and '제조년도' in filtered_df.columns and not filtered_df['제조년도'].dropna().empty:
+                                # 필터링된 데이터에서 제조년도 모드 사용
+                                mode_year = filtered_df['제조년도'].dropna().astype(str).apply(prep_year_range).mode().iloc[0]
+                            elif selected_year_range != "전체":
+                                # 사용자가 선택한 연도 범위 매핑
+                                year_map = {
+                                    "2005년 이하": "2005이하",
+                                    "2006-2010": "2006-2010",
+                                    "2011-2015": "2011-2015",
+                                    "2016-2020": "2016-2020",
+                                    "2021-2025": "2021-2025"
+                                }
+                                mode_year = year_map.get(selected_year_range, "2011-2015")
                             else:
-                                mode_range = selected_year_range
-                            year_range_encoded = le_year_range.transform([mode_range])[0]
+                                # 기본값
+                                mode_year = "2011-2015"
+                                
+                            try:
+                                year_range_encoded = le_year_range.transform([mode_year])[0]
+                            except:
+                                # 학습 데이터에 없는 구간이면 중간값 사용
+                                st.warning(f"선택한 제조년도 범위({mode_year})에 대한 학습 데이터가 없습니다. 기본값을 사용합니다.")
+                                year_range_encoded = 2  # 중간 구간 (2011-2015) 사용
 
                             # 예측할 데이터 준비
-                            pred_data = np.array([[ 
+                            pred_data = np.array([[
                                 brand_code, model_code, category_code, subcat_code, detail_code, 
                                 year_range_encoded
                             ]])
@@ -2187,15 +2279,12 @@ if df1 is not None or df3 is not None:
                                 """)
 
                         except Exception as e:
-                            st.error(f"예측 중 오류가 발생했습니다: {e}")
+                            st.error(f"예측 중 오류가 발생했습니다: {str(e)}")
+                            import traceback
+                            st.error(traceback.format_exc())
                             st.info("선택한 데이터에 대한 학습 정보가 부족할 수 있습니다.")
             else:
-                st.warning("""
-                예측 모델을 준비할 수 없습니다. 다음 사항을 확인해주세요:
-                1. 충분한 데이터(최소 100개 이상의 기록)가 있는지 확인
-                2. 필요한 컬럼(브랜드, 모델명, 작업유형, 정비대상, 정비작업)이 모두 있는지 확인
-                3. 재정비 간격 정보가 있는지 확인
-                """)
+                st.warning(f"선택한 브랜드({selected_brand})와 모델({selected_model})에 대한 데이터가 없습니다.")
 
 else:
     st.header("산업장비 AS 대시보드")

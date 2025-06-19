@@ -1108,8 +1108,15 @@ def display_maintenance_text_analysis(df, maintenance_type=None):
         # 불용어 제거
         filtered_nouns = [word for word in nouns if word not in stopwords and len(word) > 1]
 
-        # 워드클라우드용 문자열 생성
-        text_data = ' '.join(filtered_nouns)
+        # 단어 빈도 계산
+        from collections import Counter
+        word_counts = Counter(filtered_nouns)
+        
+        # 상위 100개 단어만 선별
+        top_100_words = dict(word_counts.most_common(100))
+        
+        # 워드클라우드용 문자열 생성 (상위 100개 단어만으로)
+        text_data = ' '.join([word for word in filtered_nouns if word in top_100_words])
 
         if not text_data:
             st.warning(f"{title_prefix}정비내용 데이터가 없습니다.")
@@ -1118,7 +1125,7 @@ def display_maintenance_text_analysis(df, maintenance_type=None):
             col1, col2 = st.columns(2)
 
             with col1:
-                st.subheader(f"{title_prefix}정비내용 워드클라우드")
+                st.subheader(f"{title_prefix}정비내용 워드클라우드 (상위 100개)")
 
                 try:
                     # 워드클라우드 생성
@@ -1128,12 +1135,12 @@ def display_maintenance_text_analysis(df, maintenance_type=None):
                         background_color='white',
                         font_path=font_path,  
                         colormap=current_theme,
-                        max_words=100,
+                        max_words=100,  # 최대 100개 단어만 표시
                         stopwords=set(stopwords),
                         min_font_size=10,
                         max_font_size=150,
                         random_state=42
-                    ).generate(text_data)
+                    ).generate_from_frequencies(top_100_words)
 
                     # 워드클라우드 시각화
                     fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
@@ -1149,20 +1156,17 @@ def display_maintenance_text_analysis(df, maintenance_type=None):
                     st.error(f"워드클라우드 생성 중 오류가 발생했습니다: {e}")
                     if "font_path" in str(e).lower():
                         st.info("한글 폰트 경로를 확인해주세요.")
-
+                        
             with col2:
                 # 주요 단어 표시
-                word_freq = wordcloud.words_
-                top_words = dict(sorted(word_freq.items(), key=lambda x: x[1], reverse=True)[:30])
-
                 st.subheader(f"{title_prefix}주요 단어 Top 30")
                 word_df = pd.DataFrame({
-                    '단어': list(top_words.keys()),
-                    '가중치': list(top_words.values())
+                    '단어': list(top_100_words.keys())[:30],
+                    '빈도': list(top_100_words.values())[:30]
                 })
 
                 fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                sns.barplot(x=word_df['가중치'].head(20), y=word_df['단어'].head(20), ax=ax, palette=f"{current_theme}_r")
+                sns.barplot(x=word_df['빈도'], y=word_df['단어'], ax=ax, palette=f"{current_theme}_r")
                 plt.tight_layout()
 
                 st.pyplot(fig, use_container_width=True)
@@ -1215,12 +1219,22 @@ def display_maintenance_text_analysis(df, maintenance_type=None):
                     with col3:
                         st.selectbox("정비작업", ["전체"], key=f"text_detail_empty2_{maintenance_type}")
 
-                # 필터링된 정비내용 결합
-                filtered_text = ' '.join(text_filtered_df['정비내용'].dropna().astype(str))
-
-                if not filtered_text:
+                # 필터링된 정비내용 결합 및 명사 추출
+                raw_filtered_text = ' '.join(text_filtered_df['정비내용'].dropna().astype(str))
+                
+                if not raw_filtered_text:
                     st.warning(f"선택한 분류에 대한 {title_prefix}정비내용 데이터가 없습니다.")
                 else:
+                    # 형태소 분석 및 명사 추출
+                    filtered_tokens = kiwi.tokenize(raw_filtered_text)
+                    filtered_nouns = [token.form for token in filtered_tokens if token.tag.startswith('N') and token.form not in stopwords and len(token.form) > 1]
+                    
+                    # 단어 빈도 계산
+                    filtered_word_counts = Counter(filtered_nouns)
+                    
+                    # 상위 100개 단어만 선별
+                    filtered_top_100_words = dict(filtered_word_counts.most_common(100))
+                    
                     st.write(f"선택: {selected_category} > {selected_subcategory} > {selected_detailed}")
                     st.write(f"선택된 AS 건수: {len(text_filtered_df)}")
 
@@ -1228,7 +1242,7 @@ def display_maintenance_text_analysis(df, maintenance_type=None):
 
                     with col1:
                         try:
-                            # 워드클라우드 생성
+                            # 워드클라우드 생성 (상위 100개 단어만)
                             wordcloud = WordCloud(
                                 width=1200, 
                                 height=800,
@@ -1240,7 +1254,7 @@ def display_maintenance_text_analysis(df, maintenance_type=None):
                                 min_font_size=10,
                                 max_font_size=150,
                                 random_state=42
-                            ).generate(filtered_text)
+                            ).generate_from_frequencies(filtered_top_100_words)
 
                             # 워드클라우드 시각화
                             fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
@@ -1258,16 +1272,14 @@ def display_maintenance_text_analysis(df, maintenance_type=None):
 
                     with col2:
                         # 주요 단어 표시
-                        word_freq = wordcloud.words_
-                        top_words = dict(sorted(word_freq.items(), key=lambda x: x[1], reverse=True)[:30])
-
+                        st.subheader("주요 단어 Top 30")
                         word_df = pd.DataFrame({
-                            '단어': list(top_words.keys()),
-                            '가중치': list(top_words.values())
+                            '단어': list(filtered_top_100_words.keys())[:30],
+                            '빈도': list(filtered_top_100_words.values())[:30]
                         })
 
                         fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                        sns.barplot(x=word_df['가중치'].head(20), y=word_df['단어'].head(20), ax=ax, palette=f"{current_theme}_r")
+                        sns.barplot(x=word_df['빈도'], y=word_df['단어'], ax=ax, palette=f"{current_theme}_r")
                         plt.tight_layout()
 
                         st.pyplot(fig, use_container_width=True)
@@ -1275,6 +1287,7 @@ def display_maintenance_text_analysis(df, maintenance_type=None):
                         # 다운로드 링크 추가
                         st.markdown(get_image_download_link(fig, f'{title_prefix}{selected_category}_{selected_subcategory}_{selected_detailed}_주요단어.png', 
                                 '분류별 주요단어 다운로드'), unsafe_allow_html=True)
+                        
             else:
                 st.warning("분류별 분석에 필요한 컬럼이 데이터에 없습니다.")
     else:

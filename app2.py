@@ -1,4 +1,4 @@
-import streamlit as stMore actions
+import streamlit as st
 import os
 import matplotlib.pyplot as plt
 import matplotlib.font_manager as fm
@@ -735,7 +735,6 @@ def display_maintenance_dashboard(df, category_name):
             else:
                 st.warning("수리시간 데이터가 없습니다.")
 
-# 수리비 대시보드 표시 함수 - 수정됨
 # 수리비 대시보드 표시 함수
 def display_repair_cost_dashboard(df):
     if df is None:
@@ -754,7 +753,6 @@ def display_repair_cost_dashboard(df):
         return
     
     # 기본 지표
-    col1, col2, col3 = st.columns(3)
     col1, col2, col3, col4 = st.columns(4)
 
     with col1:
@@ -764,17 +762,6 @@ def display_repair_cost_dashboard(df):
     with col2:
         total_cost = df[cost_col].sum()
         st.metric("총 수리비용", f"{total_cost:,.0f}원")
-        if '금액' in df.columns:
-            total_cost = df['금액'].sum()
-            st.metric("총 수리비용", f"{total_cost:,.0f}원")
-        else:
-            for col in df.columns:
-                if '금액' in col or '비용' in col:
-                    total_cost = df[col].sum()
-                    st.metric("총 수리비용", f"{total_cost:,.0f}원")
-                    break
-            else:
-                st.metric("총 수리비용", "데이터 없음")
 
     with col3:
         if '출고일자' in df.columns:
@@ -786,31 +773,51 @@ def display_repair_cost_dashboard(df):
     
     with col4:
         if '출고자소속' in df.columns:
-            dept_costs = df.groupby('출고자소속')[cost_col].sum()
-            top_dept = dept_costs.idxmax() if not dept_costs.empty else "정보 없음"
-            top_dept_cost = dept_costs.max() if not dept_costs.empty else 0
-            top_dept_ratio = (top_dept_cost / total_cost * 100) if total_cost > 0 else 0
-            st.metric("최다 지출 소속", f"{top_dept} ({top_dept_cost:,.0f}원, {top_dept_ratio:.1f}%)")
             dept_counts = df['출고자소속'].value_counts()
             top_dept = dept_counts.index[0] if not dept_counts.empty else "정보 없음"
             top_dept_count = dept_counts.iloc[0] if not dept_counts.empty else 0
             st.metric("최다 출고 소속", f"{top_dept} ({top_dept_count}건)")
+            
+            dept_costs = df.groupby('출고자소속')[cost_col].sum()
+            top_dept_cost = dept_costs.idxmax() if not dept_costs.empty else "정보 없음"
+            dept_cost_value = dept_costs.max() if not dept_costs.empty else 0
+            dept_cost_ratio = (dept_cost_value / total_cost * 100) if total_cost > 0 else 0
+            st.metric("최다 지출 소속", f"{top_dept_cost} ({dept_cost_value:,.0f}원, {dept_cost_ratio:.1f}%)")
         else:
-            st.metric("최다 지출 소속", "데이터 없음")
             st.metric("최다 출고 소속", "데이터 없음")
+            st.metric("최다 지출 소속", "데이터 없음")
 
     st.markdown("---")
 
-    # 월별 수리 비용
+    # 월별 수리 비용 분석
     st.subheader("월별 수리 비용 분석")
-    # 월별 수리 건수 및 비용
     col1, col2 = st.columns(2)
 
     with col1:
-        st.subheader("월별 수리 비용")
-        if '출고일자' in df.columns and cost_col:
         st.subheader("월별 수리 건수")
         if '출고일자' in df.columns:
+            df_time = df.copy()
+            df_time['월'] = df_time['출고일자'].dt.to_period('M')
+            monthly_counts = df_time.groupby('월').size().reset_index(name='건수')
+            monthly_counts['월'] = monthly_counts['월'].astype(str)
+
+            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+            sns.barplot(x='월', y='건수', data=monthly_counts, ax=ax, palette='Purples')
+
+            # 막대 위에 텍스트 표시
+            for i, v in enumerate(monthly_counts['건수']):
+                ax.text(i, v + max(monthly_counts['건수']) * 0.01, str(v), ha='center')
+
+            plt.xticks(rotation=45)
+            ax.set_ylabel('건수')
+            plt.tight_layout()
+
+            st.pyplot(fig, use_container_width=True)
+            st.markdown(get_image_download_link(fig, '월별_수리_건수.png', '월별 수리 건수 다운로드'), unsafe_allow_html=True)
+
+    with col2:
+        st.subheader("월별 수리 비용")
+        if '출고일자' in df.columns and cost_col:
             df_time = df.copy()
             df_time['월'] = df_time['출고일자'].dt.to_period('M')
             
@@ -820,92 +827,61 @@ def display_repair_cost_dashboard(df):
             # 총 비용 대비 비율 계산
             total_cost = df_time[cost_col].sum()
             monthly_costs['비율'] = (monthly_costs[cost_col] / total_cost * 100).round(1)
-            monthly_counts = df_time.groupby('월').size().reset_index(name='건수')
-            monthly_counts['월'] = monthly_counts['월'].astype(str)
 
             fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
             sns.barplot(x='월', y=cost_col, data=monthly_costs, ax=ax, palette='Purples')
-            sns.barplot(x='월', y='건수', data=monthly_counts, ax=ax, palette='Purples')
 
             # 막대 위에 텍스트 표시 (비용과 비율)
             for i, (v, r) in enumerate(zip(monthly_costs[cost_col], monthly_costs['비율'])):
                 ax.text(i, v + max(monthly_costs[cost_col]) * 0.01, 
                        f"{v:,.0f}\n({r:.1f}%)", ha='center', fontsize=8)
-            # 막대 위에 텍스트 표시
-            for i, v in enumerate(monthly_counts['건수']):
-                ax.text(i, v + max(monthly_counts['건수']) * 0.01, str(v), ha='center')
 
             plt.xticks(rotation=45)
             ax.set_ylabel('비용 (원)')
-            ax.set_ylabel('건수')
             plt.tight_layout()
 
             st.pyplot(fig, use_container_width=True)
             st.markdown(get_image_download_link(fig, '월별_수리_비용.png', '월별 수리 비용 다운로드'), unsafe_allow_html=True)
-            st.markdown(get_image_download_link(fig, '월별_수리_건수.png', '월별 수리 건수 다운로드'), unsafe_allow_html=True)
+    
+    # 누적 수리 비용 그래프
+    st.subheader("누적 수리 비용")
+    if '출고일자' in df.columns and cost_col:
+        df_time = df.copy()
+        df_time['월'] = df_time['출고일자'].dt.to_period('M')
 
-    with col2:
-        # 누적 수리 비용 그래프 추가
-        st.subheader("누적 수리 비용")
-        if '출고일자' in df.columns and cost_col:
-        st.subheader("월별 수리 비용")
-        if '출고일자' in df.columns and ('금액' in df.columns or any('금액' in col for col in df.columns)):
-            df_time = df.copy()
-            df_time['월'] = df_time['출고일자'].dt.to_period('M')
-
-            monthly_costs = df_time.groupby('월')[cost_col].sum().reset_index()
-            monthly_costs = monthly_costs.sort_values('월')
-            monthly_costs['월'] = monthly_costs['월'].astype(str)
-            # 금액 컬럼 찾기
-            cost_col = '금액' if '금액' in df.columns else next((col for col in df.columns if '금액' in col), None)
-
-            # 누적 비용 계산
-            monthly_costs['누적비용'] = monthly_costs[cost_col].cumsum()
-            
-            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
-            
-            # 누적 그래프 (선)
-            ax.plot(monthly_costs['월'], monthly_costs['누적비용'], marker='o', 
-                   color='purple', linewidth=2)
-            
-            # 텍스트 표시 (몇 개만)
-            step = max(1, len(monthly_costs) // 5)
-            for i in range(0, len(monthly_costs), step):
-                ax.text(i, monthly_costs['누적비용'].iloc[i] + max(monthly_costs['누적비용']) * 0.02,
-                       f"{monthly_costs['누적비용'].iloc[i]:,.0f}", ha='center', fontsize=8)
-            
-            # 마지막 값은 항상 표시
-            ax.text(len(monthly_costs)-1, monthly_costs['누적비용'].iloc[-1] + max(monthly_costs['누적비용']) * 0.02,
-                   f"{monthly_costs['누적비용'].iloc[-1]:,.0f}", ha='center', fontsize=8)
-            
-            plt.xticks(rotation=45)
-            ax.set_ylabel('누적 비용 (원)')
-            plt.tight_layout()
-            
-            st.pyplot(fig, use_container_width=True)
-            st.markdown(get_image_download_link(fig, '누적_수리_비용.png', '누적 수리 비용 다운로드'), unsafe_allow_html=True)
-            if cost_col:
-                monthly_costs = df_time.groupby('월')[cost_col].sum().reset_index()
-                monthly_costs['월'] = monthly_costs['월'].astype(str)
-                
-                fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
-                sns.barplot(x='월', y=cost_col, data=monthly_costs, ax=ax, palette='Purples')
-                
-                # 막대 위에 텍스트 표시 (천 단위 구분)
-                for i, v in enumerate(monthly_costs[cost_col]):
-                    ax.text(i, v + max(monthly_costs[cost_col]) * 0.01, f"{v:,.0f}", ha='center', fontsize=8)
-                
-                plt.xticks(rotation=45)
-                ax.set_ylabel('비용 (원)')
-                plt.tight_layout()
-                
-                st.pyplot(fig, use_container_width=True)
-                st.markdown(get_image_download_link(fig, '월별_수리_비용.png', '월별 수리 비용 다운로드'), unsafe_allow_html=True)
+        monthly_costs = df_time.groupby('월')[cost_col].sum().reset_index()
+        monthly_costs = monthly_costs.sort_values('월')
+        monthly_costs['월'] = monthly_costs['월'].astype(str)
+        
+        # 누적 비용 계산
+        monthly_costs['누적비용'] = monthly_costs[cost_col].cumsum()
+        
+        fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+        
+        # 누적 그래프 (선)
+        ax.plot(monthly_costs['월'], monthly_costs['누적비용'], marker='o', 
+               color='purple', linewidth=2)
+        
+        # 텍스트 표시 (몇 개만)
+        step = max(1, len(monthly_costs) // 5)
+        for i in range(0, len(monthly_costs), step):
+            ax.text(i, monthly_costs['누적비용'].iloc[i] + max(monthly_costs['누적비용']) * 0.02,
+                   f"{monthly_costs['누적비용'].iloc[i]:,.0f}", ha='center', fontsize=8)
+        
+        # 마지막 값은 항상 표시
+        ax.text(len(monthly_costs)-1, monthly_costs['누적비용'].iloc[-1] + max(monthly_costs['누적비용']) * 0.02,
+               f"{monthly_costs['누적비용'].iloc[-1]:,.0f}", ha='center', fontsize=8)
+        
+        plt.xticks(rotation=45)
+        ax.set_ylabel('누적 비용 (원)')
+        plt.tight_layout()
+        
+        st.pyplot(fig, use_container_width=True)
+        st.markdown(get_image_download_link(fig, '누적_수리_비용.png', '누적 수리 비용 다운로드'), unsafe_allow_html=True)
 
     st.markdown("---")
 
     # 소속별 수리비 분석
-    # 소속별 수리 건수 및 비용
     if '출고자소속' in df.columns:
         st.subheader("소속별 수리 비용 현황")
         
@@ -926,79 +902,72 @@ def display_repair_cost_dashboard(df):
         st.pyplot(fig, use_container_width=True)
         st.markdown(get_image_download_link(fig, '소속별_수리비용.png', '소속별 수리비용 다운로드'), unsafe_allow_html=True)
     
+        # 소속별 수리 건수
+        st.subheader("소속별 수리 건수")
+        dept_counts = df['출고자소속'].value_counts().head(10)
+        
+        fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+        sns.barplot(x=dept_counts.values, y=dept_counts.index, ax=ax, palette="Purples_r")
+        
+        # 막대 위에 텍스트 표시
+        for i, v in enumerate(dept_counts.values):
+            ax.text(v + 0.5, i, str(v), va='center')
+        
+        ax.set_xlabel('수리 건수')
+        plt.tight_layout()
+        
+        st.pyplot(fig, use_container_width=True)
+        st.markdown(get_image_download_link(fig, '소속별_수리건수.png', '소속별 수리건수 다운로드'), unsafe_allow_html=True)
+    
     # 신규 요구사항: 단가가 비싼 모델명 분석
     if '모델명' in df.columns and '단가' in df.columns:
         st.subheader("단가별 모델 분석")
         
         # 모델별 평균 단가 계산
         model_prices = df.groupby('모델명')['단가'].mean().sort_values(ascending=False).head(15)
-        st.subheader("소속별 수리 현황")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            # 높은 단가 모델 Top 15
-            st.subheader("고가 모델 Top 15")
-            # 소속별 수리 건수
-            dept_counts = df['출고자소속'].value_counts().head(10)
-
-            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-            sns.barplot(x=model_prices.values, y=model_prices.index, ax=ax, palette="Purples_r")
-            sns.barplot(x=dept_counts.values, y=dept_counts.index, ax=ax, palette="Purples_r")
-
-            # 막대 위에 텍스트 표시
-            for i, v in enumerate(model_prices.values):
-                ax.text(v + max(model_prices.values) * 0.01, i, f"{v:,.0f}원", va='center', fontsize=8)
-            for i, v in enumerate(dept_counts.values):
-                ax.text(v + 0.5, i, str(v), va='center')
-
-            ax.set_xlabel('평균 단가 (원)')
-            ax.set_xlabel('수리 건수')
-            plt.tight_layout()
-
-            st.pyplot(fig, use_container_width=True)
-            st.markdown(get_image_download_link(fig, '고가모델_Top15.png', '고가모델 Top15 다운로드'), unsafe_allow_html=True)
-            st.markdown(get_image_download_link(fig, '소속별_수리건수.png', '소속별 수리건수 다운로드'), unsafe_allow_html=True)
-
-        with col2:
-            # 고가 모델 Top 5에 대한 소속별 지출 분석
+        
+        # 높은 단가 모델 Top 15
+        st.subheader("고가 모델 Top 15")
+        
+        fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+        sns.barplot(x=model_prices.values, y=model_prices.index, ax=ax, palette="Purples_r")
+        
+        # 막대 위에 텍스트 표시
+        for i, v in enumerate(model_prices.values):
+            ax.text(v + max(model_prices.values) * 0.01, i, f"{v:,.0f}원", va='center', fontsize=8)
+        
+        ax.set_xlabel('평균 단가 (원)')
+        plt.tight_layout()
+        
+        st.pyplot(fig, use_container_width=True)
+        st.markdown(get_image_download_link(fig, '고가모델_Top15.png', '고가모델 Top15 다운로드'), unsafe_allow_html=True)
+        
+        # 고가 모델 Top 5에 대한 소속별 지출 분석
+        if '출고자소속' in df.columns and '출고금액' in df.columns:
             st.subheader("고가 모델별 소속 지출")
-            # 소속별 수리 비용
-            cost_col = '금액' if '금액' in df.columns else next((col for col in df.columns if '금액' in col), None)
-
-            if '출고자소속' in df.columns:
-                # Top 5 고가 모델만 필터링
-                top_models = model_prices.head(5).index.tolist()
-                high_cost_df = df[df['모델명'].isin(top_models)]
-                
-                # 소속별, 모델별 총 지출 계산
-                pivot_data = pd.pivot_table(
-                    high_cost_df, 
-                    values='출고금액', 
-                    index='출고자소속', 
-                    columns='모델명',
-                    aggfunc='sum',
-                    fill_value=0
-                ).head(10)
-            if cost_col:
-                dept_costs = df.groupby('출고자소속')[cost_col].sum().sort_values(ascending=False).head(10)
-
-                fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                sns.heatmap(pivot_data, annot=True, fmt=',d', cmap='Purples', ax=ax, linewidths=.5)
-                sns.barplot(x=dept_costs.values, y=dept_costs.index, ax=ax, palette="Purples_r")
-                
-                # 막대 위에 텍스트 표시 (천 단위 구분)
-                for i, v in enumerate(dept_costs.values):
-                    ax.text(v + max(dept_costs.values) * 0.01, i, f"{v:,.0f}", va='center', fontsize=8)
-
-                plt.title('소속별 고가 모델 지출 현황 (단위: 원)')
-                ax.set_xlabel('수리 비용 (원)')
-                plt.tight_layout()
-
-                st.pyplot(fig, use_container_width=True)
-                st.markdown(get_image_download_link(fig, '소속별_고가모델_지출.png', '소속별 고가모델 지출 다운로드'), unsafe_allow_html=True)
-            else:
-                st.warning("출고자소속 정보가 없어 분석할 수 없습니다.")
+            
+            # Top 5 고가 모델만 필터링
+            top_models = model_prices.head(5).index.tolist()
+            high_cost_df = df[df['모델명'].isin(top_models)]
+            
+            # 소속별, 모델별 총 지출 계산
+            pivot_data = pd.pivot_table(
+                high_cost_df, 
+                values='출고금액', 
+                index='출고자소속', 
+                columns='모델명',
+                aggfunc='sum',
+                fill_value=0
+            ).head(10)
+            
+            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+            sns.heatmap(pivot_data, annot=True, fmt=',d', cmap='Purples', ax=ax, linewidths=.5)
+            
+            plt.title('소속별 고가 모델 지출 현황 (단위: 원)')
+            plt.tight_layout()
+            
+            st.pyplot(fig, use_container_width=True)
+            st.markdown(get_image_download_link(fig, '소속별_고가모델_지출.png', '소속별 고가모델 지출 다운로드'), unsafe_allow_html=True)
 
 # 고장 유형 분석 함수 - 수정: 내부/외부/전체 탭 추가
 def display_fault_analysis(df, maintenance_type=None):
@@ -1009,7 +978,6 @@ def display_fault_analysis(df, maintenance_type=None):
     else:
         filtered_df = df
         title_prefix = ""
-                st.markdown(get_image_download_link(fig, '소속별_수리비용.png', '소속별 수리비용 다운로드'), unsafe_allow_html=True)
 
     # 필요한 컬럼 존재 여부 확인
     if all(col in filtered_df.columns for col in ['작업유형', '정비대상', '정비작업', '고장유형']):

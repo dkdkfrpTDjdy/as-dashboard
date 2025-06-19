@@ -901,7 +901,7 @@ def display_repair_cost_dashboard(df):
             ).head(10)
             
             fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-            sns.heatmap(pivot_data, annot=True, fmt=',d', cmap='Purples', ax=ax, linewidths=.5)
+            sns.heatmap(pivot_data, annot=True, fmt=',d', cmap='Purples', ax=ax, linewidths=.5, cbar=False)
             
             plt.tight_layout()
             

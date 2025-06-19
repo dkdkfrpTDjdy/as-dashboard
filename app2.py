@@ -2008,30 +2008,30 @@ if df1 is not None or df3 is not None:
             except Exception as e:
                 st.error(f"모델 준비 중 오류 발생: {e}")
                 return [None] * 10
-
+    
         # 모델 준비 (백그라운드에서 실행)
         interval_model, category_model, subcategory_model, detail_model, le_brand, le_model, le_category, le_subcategory, le_detail, le_year_range = prepare_prediction_model(df1)
-
+        
         if interval_model is not None:
             st.info("다음 고장 시기 예측과 확률이 높은 고장 유형을 예측합니다.")
-
+            
         col1, col2, col3, col4, col5 = st.columns(5)
 
         # 브랜드 목록 정의 - 특정 브랜드를 우선순위로 배치하고 나머지는 알파벳 순서로
         priority_brands = ['도요타', '두산', '현대', '클라크']
-
+        
         # 우선순위 브랜드 목록 생성
         brand_list = [brand for brand in priority_brands if brand in df1['브랜드'].unique()]
-
+        
         # 나머지 브랜드 추가 (우선순위와 '기타'를 제외하고 정렬)
         other_brands = sorted([brand for brand in df1['브랜드'].unique() 
                               if brand not in priority_brands and brand != '기타'])
         brand_list.extend(other_brands)
-
+        
         # '기타'가 있으면 마지막에 추가
         if '기타' in df1['브랜드'].unique():
             brand_list.append('기타')
-
+            
         with col1:
             selected_brand = st.selectbox("브랜드(필수)", brand_list)
 
@@ -2049,13 +2049,13 @@ if df1 is not None or df3 is not None:
 
                 if selected_id != "전체":
                     filtered_df = filtered_df[filtered_df['관리번호'] == selected_id]
-
+            
             with col4:
                 id_placeholder = f"예: {existing_ids[0]}" if len(existing_ids) > 0 else ""
                 input_id = st.text_input("관리번호(직접 입력)", placeholder=id_placeholder).strip()
                 # 선택된 ID 또는 입력된 ID 사용
-                final_id = selected_id if selected_id != "전체" else input_id
-
+                final_id = selected_id if selected_id else input_id
+    
             with col5:
                 if '제조년도' in filtered_df.columns:
                     years = filtered_df['제조년도'].dropna().astype(int)
@@ -2109,9 +2109,8 @@ if df1 is not None or df3 is not None:
                 with col2:
                     st.write(f"**이전 정비일:** {latest_record.get('최근정비일자', '정보 없음')}")
                     st.write(f"**정비 내용:** {latest_record.get('정비내용', '정보 없음')}")
-                    st.write(f"**현장명:** {latest_record.get('현장', '정보 없음')}")
-                    st.write(f"**정비사:** {latest_record.get('정비자', '정보 없음')}")
-
+                    st.write(f"**현장명:** {latest_record.get('현장명', '정보 없음')}")
+        
             # 예측 실행
             if st.button("고장 예측 실행"):
                 with st.spinner("예측 분석 중..."):

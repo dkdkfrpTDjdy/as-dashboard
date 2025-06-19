@@ -15,7 +15,7 @@ from collections import Counter
 from wordcloud import WordCloud
 import io
 import base64
-import datetime
+import datetimeMore actions
 from sklearn.ensemble import RandomForestRegressor, RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
@@ -837,56 +837,42 @@ def display_repair_cost_dashboard(df):
     with col1:
         st.subheader("월별 수리 건수")
         if '출고일자' in df.columns:
-        st.subheader("월별 수리 비용")
-        if '출고일자' in df.columns and cost_col:
             df_time = df.copy()
             df_time['월'] = df_time['출고일자'].dt.to_period('M')
             monthly_counts = df_time.groupby('월').size().reset_index(name='건수')
             monthly_counts['월'] = monthly_counts['월'].astype(str)
             
-            monthly_costs = df_time.groupby('월')[cost_col].sum().reset_index()
-            monthly_costs['월'] = monthly_costs['월'].astype(str)
-            
-            # 총 비용 대비 비율 계산
-            total_cost = df_time[cost_col].sum()
-            monthly_costs['비율'] = (monthly_costs[cost_col] / total_cost * 100).round(1)
+            if cost_col:  # cost_col 변수가 정의되어 있다고 가정
+                monthly_costs = df_time.groupby('월')[cost_col].sum().reset_index()
+                monthly_costs['월'] = monthly_costs['월'].astype(str)
+                
+                # 총 비용 대비 비율 계산
+                total_cost = df_time[cost_col].sum()
+                monthly_costs['비율'] = (monthly_costs[cost_col] / total_cost * 100).round(1)
 
-            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
-            sns.barplot(x='월', y='건수', data=monthly_counts, ax=ax, palette='Purples')
-            sns.barplot(x='월', y=cost_col, data=monthly_costs, ax=ax, palette='Purples')
+                fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+                sns.barplot(x='월', y='건수', data=monthly_counts, ax=ax, palette='Purples')
+                
+                # 막대 위에 텍스트 표시
+                for i, v in enumerate(monthly_counts['건수']):
+                    ax.text(i, v + max(monthly_counts['건수']) * 0.01, str(v), ha='center')
+                
+                plt.xticks(rotation=45)
+                ax.set_ylabel('건수')
+                plt.tight_layout()
 
-            # 막대 위에 텍스트 표시
-            for i, v in enumerate(monthly_counts['건수']):
-                ax.text(i, v + max(monthly_counts['건수']) * 0.01, str(v), ha='center')
-            # 막대 위에 텍스트 표시 (비용과 비율)
-            for i, (v, r) in enumerate(zip(monthly_costs[cost_col], monthly_costs['비율'])):
-                ax.text(i, v + max(monthly_costs[cost_col]) * 0.01, 
-                       f"{v:,.0f}\n({r:.1f}%)", ha='center', fontsize=8)
-
-            plt.xticks(rotation=45)
-            ax.set_ylabel('건수')
-            ax.set_ylabel('비용 (원)')
-            plt.tight_layout()
-
-            st.pyplot(fig, use_container_width=True)
-            st.markdown(get_image_download_link(fig, '월별_수리_건수.png', '월별 수리 건수 다운로드'), unsafe_allow_html=True)
-            st.markdown(get_image_download_link(fig, '월별_수리_비용.png', '월별 수리 비용 다운로드'), unsafe_allow_html=True)
+                st.pyplot(fig, use_container_width=True)
+                st.markdown(get_image_download_link(fig, '월별_수리_건수.png', '월별 수리 건수 다운로드'), unsafe_allow_html=True)
 
     with col2:
         st.subheader("월별 수리 비용")
         if '출고일자' in df.columns and ('금액' in df.columns or any('금액' in col for col in df.columns)):
-        # 누적 수리 비용 그래프 추가
-        st.subheader("누적 수리 비용")
-        if '출고일자' in df.columns and cost_col:
             df_time = df.copy()
             df_time['월'] = df_time['출고일자'].dt.to_period('M')
 
             # 금액 컬럼 찾기
             cost_col = '금액' if '금액' in df.columns else next((col for col in df.columns if '금액' in col), None)
-            monthly_costs = df_time.groupby('월')[cost_col].sum().reset_index()
-            monthly_costs = monthly_costs.sort_values('월')
-            monthly_costs['월'] = monthly_costs['월'].astype(str)
-
+            
             if cost_col:
                 monthly_costs = df_time.groupby('월')[cost_col].sum().reset_index()
                 monthly_costs['월'] = monthly_costs['월'].astype(str)

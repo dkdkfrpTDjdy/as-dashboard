@@ -845,7 +845,7 @@ def display_repair_cost_dashboard(df):
             # 결과 소트
             dept_comparison = dept_comparison.sort_values('인원당비용', ascending=False)
             
-            fig, ax = create_figure_with_korean(figsize=(8, 8), dpi=300)
+            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
             sns.barplot(x=dept_comparison['인원당비용'], y=dept_comparison['소속'], ax=ax, palette="Purples_r")
             
             # 막대 위에 텍스트 표시 (인원당 비용, 총 비용, 소속 인원수)
@@ -1125,7 +1125,7 @@ def display_maintenance_text_analysis(df, maintenance_type=None):
             col1, col2 = st.columns(2)
 
             with col1:
-                st.subheader(f"{title_prefix}정비내용 워드클라우드 (상위 100개)")
+                st.subheader(f"{title_prefix}정비내용 워드클라우드")
 
                 try:
                     # 워드클라우드 생성
@@ -1156,7 +1156,7 @@ def display_maintenance_text_analysis(df, maintenance_type=None):
                     st.error(f"워드클라우드 생성 중 오류가 발생했습니다: {e}")
                     if "font_path" in str(e).lower():
                         st.info("한글 폰트 경로를 확인해주세요.")
-                        
+
             with col2:
                 # 주요 단어 표시
                 st.subheader(f"{title_prefix}주요 단어 Top 30")

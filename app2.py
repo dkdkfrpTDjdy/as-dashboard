@@ -280,11 +280,6 @@ def load_data(file):
                     '소분류': '정비작업'
                 }, inplace=True)
 
-            # 브랜드 컬럼 처리 - 제조사명 컬럼이 있으면 그것을 사용, 없으면 '기타'로 채움
-            if '제조사명' in df.columns:
-                df['브랜드'] = df['제조사명'].fillna('기타')
-            else:
-                df['브랜드'] = '기타'
                 
             # 고장유형 조합
             if all(col in df.columns for col in ['작업유형', '정비대상', '정비작업']):
@@ -293,11 +288,6 @@ def load_data(file):
                 df.loc[mask, '고장유형'] = (df.loc[mask, '작업유형'].astype(str) + '_' + 
                                          df.loc[mask, '정비대상'].astype(str) + '_' + 
                                          df.loc[mask, '정비작업'].astype(str))
-
-            # 브랜드_모델 조합 (브랜드와 모델명이 있는 경우)
-            if '브랜드' in df.columns and '모델명' in df.columns:
-                mask = df['브랜드'].notna() & df['모델명'].notna()
-                df.loc[mask, '브랜드_모델'] = df.loc[mask, '브랜드'].astype(str) + '_' + df.loc[mask, '모델명'].astype(str)
 
         except Exception as e:
             st.warning(f"일부 데이터 전처리 중 오류가 발생했습니다: {e}")

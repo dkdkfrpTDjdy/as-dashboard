@@ -220,19 +220,8 @@ def load_data(file):
                     '소분류': '정비작업'
                 }, inplace=True)
                 
-            # 고장유형 조합
-            if all(col in df.columns for col in ['작업유형', '정비대상', '정비작업']):
-                # nan 값을 가진 행 필터링하여 처리
-                mask = df['작업유형'].notna() & df['정비대상'].notna() & df['정비작업'].notna()
-                df.loc[mask, '고장유형'] = (df.loc[mask, '작업유형'].astype(str) + '_' + 
-                                         df.loc[mask, '정비대상'].astype(str) + '_' + 
-                                         df.loc[mask, '정비작업'].astype(str))
-
-            if '제조사명' in df.columns:
-                df['브랜드'] = df['제조사명'].fillna('기타')
-            else:
-                df['브랜드'] = '기타'
-
+            # 고장유형 조합은 나중에 브랜드 정보가 적절히 설정된 후에 수행
+            
         except Exception as e:
             st.warning(f"일부 데이터 전처리 중 오류가 발생했습니다: {e}")
 
@@ -241,27 +230,69 @@ def load_data(file):
         st.error(f"파일 로드 오류: {e}")
         return None
 
-# 두 데이터프레임 병합 함수 - 수정: 브랜드 매핑 개선
+# 두 데이터프레임 병합 함수 - 브랜드 매핑 문제 해결
 def merge_dataframes(df1, df2):
     if df1 is None or df2 is None:
         return None
 
     try:
-        # 필요한 컬럼만 선택 (자산조회 데이터)
-        df2_subset = df2[['관리번호', '제조사명', '제조년도', '취득가', '자재내역']]
-        
-        # 데이터 타입 통일 - 관리번호를 문자열로 변환 (추가된 부분)
+        # 데이터 타입 통일 - 관리번호를 문자열로 변환
         df1['관리번호'] = df1['관리번호'].astype(str)
-        df2_subset['관리번호'] = df2_subset['관리번호'].astype(str)
+        df2['관리번호'] = df2['관리번호'].astype(str)
         
-        # 중복 관리번호 확인 (디버깅용)
-        if df2_subset['관리번호'].duplicated().any():
-            print(f"경고: 자산조회 데이터에 중복된 관리번호가 있습니다: {df2_subset['관리번호'].duplicated().sum()}개")
+        # 중복 관리번호 확인 및 제거 (자산 데이터에서)
+        if df2['관리번호'].duplicated().any():
+            # 디버깅 정보
+            st.sidebar.info(f"자산조회 데이터에 중복된 관리번호가 있습니다: {df2['관리번호'].duplicated().sum()}개 - 첫번째 값만 사용합니다.")
             # 중복 제거 (첫 번째 값 유지)
-            df2_subset = df2_subset.drop_duplicates(subset='관리번호')
+            df2 = df2.drop_duplicates(subset='관리번호')
             
+        # 자산 데이터에서 필요한 컬럼만 선택
+        df2_subset = df2[['관리번호', '제조사명', '제조사모델명', '제조년도', '취득가', '자재내역']]
+        
+        # 컬럼명 표준화: 제조사명 -> 브랜드, 제조사모델명 -> 모델명
+        df2_subset = df2_subset.rename(columns={
+            '제조사명': '브랜드',
+            '제조사모델명': '모델명'
+        })
+        
         # 관리번호 컬럼을 기준으로 왼쪽 조인으로 병합 (AS 데이터는 모두 유지)
+        # 브랜드와 모델명이 이미 존재할 경우 _x, _y로 구분됨
         merged_df = pd.merge(df1, df2_subset, on='관리번호', how='left')
+            
+        # 브랜드 컬럼 처리
+        # 기존에 브랜드(_x)가 있고 값도 있으면 유지, 없으면 자산데이터의 브랜드(_y)를 사용
+        if '브랜드_x' in merged_df.columns and '브랜드_y' in merged_df.columns:
+            # 두 컬럼이 모두 있는 경우 - 병합 처리
+            merged_df['브랜드'] = merged_df['브랜드_x'].fillna(merged_df['브랜드_y'])
+            # 원본 컬럼 삭제
+            merged_df = merged_df.drop(['브랜드_x', '브랜드_y'], axis=1)
+        elif '브랜드_y' in merged_df.columns:
+            # 자산 데이터의 브랜드만 있는 경우
+            merged_df['브랜드'] = merged_df['브랜드_y']
+            merged_df = merged_df.drop(['브랜드_y'], axis=1)
+        elif '브랜드_x' in merged_df.columns:
+            # AS 데이터의 브랜드만 있는 경우
+            merged_df['브랜드'] = merged_df['브랜드_x']
+            merged_df = merged_df.drop(['브랜드_x'], axis=1)
+        
+        # 브랜드에 여전히 NaN이 있으면 '기타'로 채움
+        if '브랜드' in merged_df.columns:
+            merged_df['브랜드'] = merged_df['브랜드'].fillna('기타')
+        else:
+            # 브랜드 컬럼이 없는 경우 새로 생성
+            merged_df['브랜드'] = '기타'
+        
+        # 모델명 처리 (브랜드와 동일한 방식)
+        if '모델명_x' in merged_df.columns and '모델명_y' in merged_df.columns:
+            merged_df['모델명'] = merged_df['모델명_x'].fillna(merged_df['모델명_y'])
+            merged_df = merged_df.drop(['모델명_x', '모델명_y'], axis=1)
+        elif '모델명_y' in merged_df.columns:
+            merged_df['모델명'] = merged_df['모델명_y']
+            merged_df = merged_df.drop(['모델명_y'], axis=1)
+        elif '모델명_x' in merged_df.columns:
+            merged_df['모델명'] = merged_df['모델명_x']
+            merged_df = merged_df.drop(['모델명_x'], axis=1)
             
         # 자재내역 컬럼 분할 (있는 경우만)
         if '자재내역' in merged_df.columns and merged_df['자재내역'].notna().any():
@@ -278,10 +309,23 @@ def merge_dataframes(df1, df2):
                     else:
                         merged_df[col_name] = None
 
-        # 브랜드_모델 컬럼 재생성
+        # 브랜드와 모델명으로 브랜드_모델 컬럼 생성
         if '브랜드' in merged_df.columns and '모델명' in merged_df.columns:
             mask = merged_df['브랜드'].notna() & merged_df['모델명'].notna()
             merged_df.loc[mask, '브랜드_모델'] = merged_df.loc[mask, '브랜드'].astype(str) + '_' + merged_df.loc[mask, '모델명'].astype(str)
+        
+        # 고장유형 조합 (이제 브랜드가 적절히 설정되었으므로 수행)
+        if all(col in merged_df.columns for col in ['작업유형', '정비대상', '정비작업']):
+            # nan 값을 가진 행 필터링하여 처리
+            mask = merged_df['작업유형'].notna() & merged_df['정비대상'].notna() & merged_df['정비작업'].notna()
+            merged_df.loc[mask, '고장유형'] = (merged_df.loc[mask, '작업유형'].astype(str) + '_' + 
+                                            merged_df.loc[mask, '정비대상'].astype(str) + '_' + 
+                                            merged_df.loc[mask, '정비작업'].astype(str))
+
+        # 디버깅: 브랜드 정보 출력
+        st.sidebar.info(f"병합 후 브랜드 유니크 값: {merged_df['브랜드'].nunique()}")
+        if merged_df['브랜드'].nunique() < 2:
+            st.sidebar.warning("브랜드 값이 너무 적습니다. 병합이 제대로 되지 않았을 수 있습니다.")
 
         return merged_df
     except Exception as e:
@@ -314,22 +358,49 @@ try:
     # 자산조회 데이터 로드 (같은 레포지토리 내 파일)
     asset_data_path = "data/자산조회데이터.xlsx"
     df2 = pd.read_excel(asset_data_path)
+    
+    # 컬럼명 정리 (자산데이터도 동일하게 처리)
+    df2.columns = [str(col).strip().replace('\n', '') for col in df2.columns]
+    
+    st.sidebar.success("자산조회 데이터가 로드되었습니다.")
 except Exception as e:
     df2 = None
+    st.sidebar.warning(f"자산조회 데이터를 로드할 수 없습니다: {e}")
 
 try:
     # 조직도 데이터 로드 (같은 레포지토리 내 파일)
     org_data_path = "data/조직도데이터.xlsx"
     df4 = pd.read_excel(org_data_path)
+    
+    # 컬럼명 정리
+    df4.columns = [str(col).strip().replace('\n', '') for col in df4.columns]
+    
+    st.sidebar.success("조직도 데이터가 로드되었습니다.")
 except Exception as e:
     df4 = None
+    st.sidebar.warning(f"조직도 데이터를 로드할 수 없습니다: {e}")
 
 # 데이터 병합 및 전처리
 if df1 is not None:
+    # 정비일지 데이터 기본 정보 출력
+    st.sidebar.info(f"정비일지 데이터: {len(df1)}개 행")
+    
     # 자산 데이터와 병합
     if df2 is not None:
+        st.sidebar.info(f"자산 데이터: {len(df2)}개 행")
+        
         # 병합 전 브랜드 컬럼 존재 여부 확인
         has_brand_before = '브랜드' in df1.columns
+        if has_brand_before:
+            brand_before_counts = df1['브랜드'].value_counts()
+            st.sidebar.write("병합 전 브랜드 분포:")
+            st.sidebar.write(brand_before_counts.head(3))
+        
+        # 자산 데이터 브랜드 확인
+        if '제조사명' in df2.columns:
+            brand_asset_counts = df2['제조사명'].value_counts()
+            st.sidebar.write("자산 데이터 브랜드 분포:")
+            st.sidebar.write(brand_asset_counts.head(3))
         
         # 자산 데이터와 병합
         df1 = merge_dataframes(df1, df2)
@@ -337,12 +408,17 @@ if df1 is not None:
         # 병합 결과 확인
         if '브랜드' in df1.columns:
             brand_counts = df1['브랜드'].value_counts()
-            st.sidebar.write("브랜드 분포:")
+            st.sidebar.write("병합 후 브랜드 분포:")
             st.sidebar.write(brand_counts.head(5))
             
             # 기타 비율이 너무 높으면 경고
             if '기타' in brand_counts.index and brand_counts['기타'] / len(df1) > 0.5:
                 st.sidebar.warning("브랜드 '기타'가 50% 이상입니다. 자산조회 데이터 매핑에 문제가 있을 수 있습니다.")
+                
+            # 브랜드 매핑률 계산
+            mapped_brands = len(df1) - (brand_counts.get('기타', 0) if '기타' in brand_counts.index else 0)
+            mapping_rate = (mapped_brands / len(df1)) * 100
+            st.sidebar.info(f"브랜드 매핑률: {mapping_rate:.1f}%")
         else:
             st.sidebar.warning("브랜드 컬럼이 없습니다. 데이터 병합 과정에 문제가 있습니다.")
 

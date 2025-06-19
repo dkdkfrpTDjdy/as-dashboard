@@ -73,29 +73,31 @@ def create_figure_with_korean(figsize=(10, 6), dpi=300):
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     return fig, ax
 
-# 주소에서 지역 추출 함수 개선 버전
 def extract_region_from_address(address):
     if not isinstance(address, str):
-        return None
-
+        return None, None
+    
     # 주소 형태인 경우만 처리
     if len(address) >= 3:  # 최소 "시/도 " 형태 (3글자 이상) 필요
         first_two = address[:2]
-
+        
         # 시/도 약칭 리스트
         regions = ['서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종', 
                   '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주']
-
+        
         # 첫 두 글자가 시/도이고 그 뒤에 공백이 있으면 주소로 간주
         if first_two in regions and address[2] == ' ':
-            return first_two
-    return None
+            return first_two, address  # 지역과 전체 주소 반환
+    
+    return None, address  # 지역 없음, 원본 값은 현장명으로 간
 
-# 현장 컬럼에서 지역 추출 및 적용
+# 현장 컬럼에서 지역과 현장명 추출 및 적용
 def extract_and_apply_region(df):
-    if '현장' in df.columns:  # 'current'가 아니라 '현장'으로 수정
-        # 지역 추출
-        df['지역'] = df['현장'].apply(extract_region_from_address)
+    if '현장' in df.columns:
+        # 지역과 주소/현장명 추출
+        results = df['현장'].apply(extract_region_from_address)
+        df['지역'] = [r[0] for r in results]
+        df['현장명'] = [r[1] for r in results]
     return df
 
 # 문자열 리스트로 변환하는 함수 (NaN과 혼합 유형 처리용)
@@ -182,6 +184,67 @@ def map_employee_data(df, org_df):
         import traceback
         st.error(traceback.format_exc())  # 상세 오류 정보 출력
         return df
+    
+# 수리비 데이터와 정비일지 데이터 매핑 함수
+def map_repair_costs(df1, df3):
+    if df1 is None or df3 is None:
+        return df1
+    
+    try:
+        # 데이터 타입 통일
+        df1 = df1.copy()
+        df3 = df3.copy()
+        
+        df1['관리번호'] = df1['관리번호'].astype(str)
+        df3['관리번호'] = df3['관리번호'].astype(str)
+        
+        df1['정비자번호'] = df1['정비자번호'].astype(str)
+        df3['출고자'] = df3['출고자'].astype(str)
+        
+        # 날짜 형식 통일
+        if '정비일자' in df1.columns and '출고일자' in df3.columns:
+            df1['정비일자'] = pd.to_datetime(df1['정비일자'], errors='coerce')
+            df3['출고일자'] = pd.to_datetime(df3['출고일자'], errors='coerce')
+        
+        # 결과 데이터프레임 초기화
+        df1['수리비'] = 0
+        df1['자재명_목록'] = ''
+        
+        # 매핑 조건에 맞는 데이터 찾기
+        for idx, row in df1.iterrows():
+            # 관리번호 및 정비자번호가 동일한 df3의 행들 찾기
+            matching_repairs = df3[
+                (df3['관리번호'] == row['관리번호']) & 
+                (df3['출고자'] == row['정비자번호'])
+            ]
+            
+            # 30일 전후로 일치하는지 확인
+            if '정비일자' in row and not pd.isna(row['정비일자']):
+                date_condition = (
+                    (matching_repairs['출고일자'] >= row['정비일자'] - pd.Timedelta(days=30)) &
+                    (matching_repairs['출고일자'] <= row['정비일자'] + pd.Timedelta(days=30))
+                )
+                matching_repairs = matching_repairs[date_condition]
+            
+            # 매칭된 행이 있는 경우
+            if not matching_repairs.empty:
+                # 출고금액 합산
+                total_cost = matching_repairs['출고금액'].sum()
+                
+                # 자재명 목록 생성
+                materials = ', '.join(matching_repairs['자재명'].dropna().unique())
+                
+                # 값 업데이트
+                df1.at[idx, '수리비'] = total_cost
+                df1.at[idx, '자재명_목록'] = materials
+        
+        return df1
+    
+    except Exception as e:
+        st.error(f"수리비 데이터 매핑 중 오류 발생: {e}")
+        import traceback
+        st.error(traceback.format_exc())
+        return df1
 
 # 폰트 설정 실행
 font_path = setup_korean_font_test()
@@ -192,8 +255,7 @@ if font_path and os.path.exists(font_path):
 # 메뉴별 색상 테마 설정
 color_themes = {
     "정비일지 대시보드": "Blues",
-    "수리비 대시보드": "Purples",
-    "고장 유형 분석": "Greens",
+    "고장 유형 분석": "Purples",
     "브랜드/모델 분석": "Oranges",
     "정비내용 분석": "YlOrRd",
     "고장 예측": "viridis"
@@ -378,44 +440,24 @@ except Exception as e:
 
 # 데이터 병합 및 전처리
 if df1 is not None:
-
+    # 1. 먼저 자산 데이터 병합
     if df2 is not None:
-        
-        # 병합 전 브랜드 컬럼 존재 여부 확인
-        has_brand_before = '브랜드' in df1.columns
-        if has_brand_before:
-            brand_before_counts = df1['브랜드'].value_counts()
-            st.sidebar.write("병합 전 브랜드 분포:")
-            st.sidebar.write(brand_before_counts.head(3))
-        
-        # 자산 데이터 브랜드 확인
-        if '제조사명' in df2.columns:
-            brand_asset_counts = df2['제조사명'].value_counts()
-        
         # 자산 데이터와 병합
         df1 = merge_dataframes(df1, df2)
         
-        # 병합 결과 확인
-        if '브랜드' in df1.columns:
-            brand_counts = df1['브랜드'].value_counts()
-            
-            # 기타 비율이 너무 높으면 경고
-            if '기타' in brand_counts.index and brand_counts['기타'] / len(df1) > 0.5:
-                st.sidebar.warning("브랜드 '기타'가 50% 이상입니다. 자산조회 데이터 매핑에 문제가 있을 수 있습니다.")
-                
-            # 브랜드 매핑률 계산
-            mapped_brands = len(df1) - (brand_counts.get('기타', 0) if '기타' in brand_counts.index else 0)
-            mapping_rate = (mapped_brands / len(df1)) * 100
-
-    # 최근 정비일자 계산
+    # 2. 최근 정비일자 계산
     df1 = calculate_previous_maintenance_dates(df1)
 
-    # 조직도 데이터 매핑
+    # 3. 조직도 데이터 매핑
     if df4 is not None:
         df1 = map_employee_data(df1, df4)
 
-    # 현장 컬럼에서 지역 정보 추출
+    # 4. 현장 컬럼에서 지역 정보 추출
     df1 = extract_and_apply_region(df1)
+        
+    # 5. 수리비 데이터 매핑 (모든 전처리 후)
+    if df3 is not None:
+        df1 = map_repair_costs(df1, df3)
 
     # 날짜 변환 - 오류 수정
     try:
@@ -442,24 +484,7 @@ if df1 is not None:
     except Exception as main_error:
         st.error(f"정비일지 데이터 전처리 중 오류 발생: {main_error}")
 
-# 수리비 데이터 전처리
-if df3 is not None:
-    # 조직도 데이터 매핑
-    if df4 is not None:
-        df3 = map_employee_data(df3, df4)
-    try:
-        # 날짜 변환
-        if '출고일자' in df3.columns:
-            df3['출고일자'] = pd.to_datetime(df3['출고일자'], errors='coerce')
-
-        # 금액 컬럼 숫자로 변환
-        for col in df3.columns:
-            if '금액' in col or '비용' in col or '단가' in col:
-                df3[col] = pd.to_numeric(df3[col], errors='coerce')
-    except Exception as e:
-        st.warning(f"수리비 데이터 전처리 중 오류가 발생했습니다: {e}")
-
-# 정비일지 대시보드 표시 함수 (수정됨)
+# 정비일지 대시보드 표시 함수 (수리비 정보 포함하도록 수정함)
 def display_maintenance_dashboard(df, category_name):
     # 지표 카드용 컬럼 생성
     col1, col2, col3, col4 = st.columns(4)
@@ -497,23 +522,16 @@ def display_maintenance_dashboard(df, category_name):
             st.metric("평균 수리시간", "데이터 없음")
 
     with col4:
-        # 정비일자 컬럼이 있는지 확인하고, 없으면 비슷한 이름의 컬럼 찾기
-        date_col = None
-        for col in df.columns:
-            if '정비일자' in col:
-                date_col = col
-                break
-
-        if date_col and not df[date_col].empty:
-            last_month = df[date_col].max().strftime('%Y-%m')
-            last_month_count = df[df[date_col].dt.strftime('%Y-%m') == last_month].shape[0]
-            st.metric("최근 월 AS 건수", f"{last_month_count:,}")
+        # 수리비 컬럼이 있는지 확인
+        if '수리비' in df.columns:
+            total_repair_cost = df['수리비'].sum()
+            st.metric("총 수리비용", f"{total_repair_cost:,.0f}원")
         else:
-            st.metric("최근 월 AS 건수", "데이터 없음")
+            st.metric("총 수리비용", "데이터 없음")
 
     st.markdown("---")
 
-    # 1. 월별 AS건수 + 월별 평균 가동 및 수리시간 + 수리시간 분포
+    # 1. 월별 AS건수 + 월별 평균 수리비 + 수리시간 분포
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -544,30 +562,31 @@ def display_maintenance_dashboard(df, category_name):
             st.markdown(get_image_download_link(fig, f'{category_name}_월별_AS_건수.png', '월별 AS 건수 다운로드'), unsafe_allow_html=True)
             
     with col2:
-        if '가동시간' in df.columns:
-            st.subheader("월별 평균 가동시간")
-            if '정비일자' in df.columns:
-                df['월'] = df['정비일자'].dt.to_period('M')
-                # 이후 그래프 생성
-            else:
-                st.warning("정비일자 컬럼이 없습니다. 월별 분석을 건너뜁니다.")
-                
-            monthly_avg = df.groupby('월')['가동시간'].mean().reset_index()
+        # 월별 수리비 평균 그래프 (수리비 데이터가 있는 경우)
+        st.subheader("월별 평균 수리비")
+        if '정비일자' in df.columns and '수리비' in df.columns:
+            df_cost = df.copy()
+            df_cost['월'] = df_cost['정비일자'].dt.to_period('M')
+            
+            # 월별 평균 수리비 계산
+            monthly_costs = df_cost.groupby('월')['수리비'].mean().reset_index()
+            monthly_costs['월'] = monthly_costs['월'].astype(str)
             
             fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
-            sns.barplot(data=monthly_avg, x='월', y='가동시간', ax=ax, palette="Blues")
+            sns.barplot(x='월', y='수리비', data=monthly_costs, ax=ax, palette="Blues")
             
             # 평균값 텍스트 표시
-            for index, row in monthly_avg.iterrows():
-                ax.text(index, row['가동시간'] + 0.2, f"{row['가동시간']:.1f}시간", ha='center')
+            for i, row in monthly_costs.iterrows():
+                ax.text(i, row['수리비'] + 100, f"{row['수리비']:,.0f}원", ha='center', fontsize=8)
             
             plt.xticks(rotation=45)
+            ax.set_ylabel('평균 수리비 (원)')
             plt.tight_layout()
             
             st.pyplot(fig, use_container_width=True)
-            
-            # 다운로드 링크 추가
-            st.markdown(get_image_download_link(fig, f'{category_name}_월별_평균_가동시간.png', '월별 평균 가동시간 다운로드'), unsafe_allow_html=True)
+            st.markdown(get_image_download_link(fig, f'{category_name}_월별_평균_수리비.png', '월별 평균 수리비 다운로드'), unsafe_allow_html=True)
+        else:
+            st.info("수리비 데이터가 없습니다.")
         
     with col3:
         if '수리시간' in df.columns:
@@ -595,7 +614,7 @@ def display_maintenance_dashboard(df, category_name):
             
     st.markdown("---")
 
-    # 지역별 AS 건수와 정비자 소속별 분석을 3개의 컬럼으로 구성
+    # 지역별 AS 건수, 수리비를 많이 쓴 현장, 인당 수리비 소속 분석을 세 개의 컬럼으로 구성
     col1, col2, col3 = st.columns(3)
 
     with col1:
@@ -613,7 +632,7 @@ def display_maintenance_dashboard(df, category_name):
             if others_count > 0:
                 region_counts['기타'] = others_count
 
-            region_counts = region_counts.sort_values(ascending=False).nlargest(20)
+            region_counts = region_counts.sort_values(ascending=False).nlargest(15)
 
             # 시각화
             fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
@@ -635,94 +654,112 @@ def display_maintenance_dashboard(df, category_name):
         else:
             st.warning("지역 정보가 없습니다.")
 
-    # 정비자 소속별 분석은 col2와 col3에 배치
-    if '정비자소속' in df.columns and df4 is not None:
-        with col2:
-            st.subheader("정비자 소속별 건수")
+    with col2:
+        # 수리비 많은 현장 순위 (새로 추가)
+        st.subheader("수리비 많은 현장 TOP 15")
+        if '현장명' in df.columns and '수리비' in df.columns:
+            # 현장별 총 수리비 계산
+            site_costs = df.groupby('현장명')['수리비'].sum().sort_values(ascending=False).head(15)
+            
+            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+            sns.barplot(x=site_costs.values, y=site_costs.index, ax=ax, palette="Blues_r")
+            
+            # 막대 위에 텍스트 표시
+            for i, v in enumerate(site_costs.values):
+                ax.text(v + max(site_costs.values) * 0.01, i, f"{v:,.0f}원", va='center', fontsize=8)
+            
+            ax.set_xlabel('총 수리비 (원)')
+            plt.tight_layout()
+            
+            st.pyplot(fig, use_container_width=True)
+            st.markdown(get_image_download_link(fig, f'{category_name}_현장별_수리비.png', '현장별 수리비 다운로드'), unsafe_allow_html=True)
+        else:
+            st.warning("현장명 또는 수리비 정보가 없습니다.")
+
+    with col3:
+        # 인당 수리비 많은 소속 순위 (새로 추가)
+        if '정비자소속' in df.columns and '수리비' in df.columns and df4 is not None:
+            st.subheader("소속별 인당 수리비 TOP 15")
             
             # 전체 소속별 인원수 계산
             total_staff_by_dept = df4['소속'].value_counts()
-            total_staff = len(df4)
             
-            # 정비 소속별 건수 및 비율
-            dept_counts = df['정비자소속'].value_counts().head(10)
+            # 소속별 총 수리비 계산
+            dept_costs = df.groupby('정비자소속')['수리비'].sum().sort_values(ascending=False)
             
-            # 소속별 정비 건수 및 인원 비율 계산
+            # 소속별 수리비 및 인원 비율 계산
             dept_comparison = pd.DataFrame({
-                '소속': dept_counts.index,
-                '정비건수': dept_counts.values,
-                '소속인원수': [total_staff_by_dept.get(dept, 0) for dept in dept_counts.index]
+                '소속': dept_costs.index,
+                '총수리비': dept_costs.values,
+                '소속인원수': [total_staff_by_dept.get(dept, 0) for dept in dept_costs.index]
             })
             
             # 인원이 0이면 1로 설정하여 나누기 오류 방지
             dept_comparison['소속인원수'] = dept_comparison['소속인원수'].replace(0, 1)
             
-            # 인원당 정비 건수 계산
-            dept_comparison['인원당건수'] = (dept_comparison['정비건수'] / dept_comparison['소속인원수']).round(1)
+            # 인원당 수리비 계산
+            dept_comparison['인원당수리비'] = (dept_comparison['총수리비'] / dept_comparison['소속인원수']).round(0)
             
-            # 결과 소트
-            dept_comparison = dept_comparison.sort_values('인원당건수', ascending=False)
-
+            # 결과 소트하고 상위 15개 선택
+            dept_comparison = dept_comparison.sort_values('인원당수리비', ascending=False).head(15)
+            
             fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-            sns.barplot(x=dept_comparison['인원당건수'], y=dept_comparison['소속'], ax=ax, palette="Blues_r")
-
-            # 막대 위에 텍스트 표시 (인원당 건수, 총 건수, 소속 인원수)
+            sns.barplot(x=dept_comparison['인원당수리비'], y=dept_comparison['소속'], ax=ax, palette="Blues_r")
+            
+            # 막대 위에 텍스트 표시
             for i, row in enumerate(dept_comparison.itertuples()):
-                ax.text(row.인원당건수 + 0.1, i, 
-                       f"{row.인원당건수:.1f}건/인)", 
-                       va='center', fontsize=8)
-
-            ax.set_xlabel('인원당 정비 건수')
+                ax.text(row.인원당수리비 + 100, i, f"{row.인원당수리비:,.0f}원/인", va='center', fontsize=8)
+            
+            ax.set_xlabel('인원당 수리비 (원)')
             plt.tight_layout()
-
+            
             st.pyplot(fig, use_container_width=True)
-            st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당정비건수.png', '소속별 인원당정비건수 다운로드'), unsafe_allow_html=True)
-
-        with col3:
-            st.subheader("정비자 소속별 수리시간")
-            # 소속별 평균 수리시간
-            if '수리시간' in df.columns:
-                # 소속별 총 수리시간 계산
-                dept_total_repair_time = df.groupby('정비자소속')['수리시간'].sum().sort_values(ascending=False).head(10)
+            st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당수리비.png', '소속별 인원당수리비 다운로드'), unsafe_allow_html=True)
+        else:
+            st.info("정비자소속 또는 수리비 정보가 없습니다.")
+            
+            # 정비자 소속별 정비건수 분석은 수리비 정보가 없을 때만 표시
+            if '정비자소속' in df.columns and df4 is not None:
+                st.subheader("정비자 소속별 건수")
                 
-                # 소속별 데이터 통합
-                dept_time_comparison = pd.DataFrame({
-                    '소속': dept_total_repair_time.index,
-                    '총수리시간': dept_total_repair_time.values,
-                    '소속인원수': [total_staff_by_dept.get(dept, 0) for dept in dept_total_repair_time.index]
+                # 전체 소속별 인원수 계산
+                total_staff_by_dept = df4['소속'].value_counts()
+                total_staff = len(df4)
+                
+                # 정비 소속별 건수 및 비율
+                dept_counts = df['정비자소속'].value_counts().head(15)
+                
+                # 소속별 정비 건수 및 인원 비율 계산
+                dept_comparison = pd.DataFrame({
+                    '소속': dept_counts.index,
+                    '정비건수': dept_counts.values,
+                    '소속인원수': [total_staff_by_dept.get(dept, 0) for dept in dept_counts.index]
                 })
                 
-                # 인원이 0이면 1로 설정
-                dept_time_comparison['소속인원수'] = dept_time_comparison['소속인원수'].replace(0, 1)
+                # 인원이 0이면 1로 설정하여 나누기 오류 방지
+                dept_comparison['소속인원수'] = dept_comparison['소속인원수'].replace(0, 1)
                 
-                # 인원당 수리시간 계산
-                dept_time_comparison['인원당수리시간'] = (dept_time_comparison['총수리시간'] / dept_time_comparison['소속인원수']).round(1)
+                # 인원당 정비 건수 계산
+                dept_comparison['인원당건수'] = (dept_comparison['정비건수'] / dept_comparison['소속인원수']).round(1)
                 
-                # 정렬
-                dept_time_comparison = dept_time_comparison.sort_values('인원당수리시간', ascending=False)
+                # 결과 소트
+                dept_comparison = dept_comparison.sort_values('인원당건수', ascending=False)
 
                 fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                sns.barplot(x=dept_time_comparison['인원당수리시간'], y=dept_time_comparison['소속'], ax=ax, palette="Blues_r")
+                sns.barplot(x=dept_comparison['인원당건수'], y=dept_comparison['소속'], ax=ax, palette="Blues_r")
 
-                # 막대 위에 텍스트 표시
-                for i, row in enumerate(dept_time_comparison.itertuples()):
-                    ax.text(row.인원당수리시간 + 0.1, i, 
-                           f"{row.인원당수리시간:.1f}시간/인)", 
+                # 막대 위에 텍스트 표시 (인원당 건수, 총 건수, 소속 인원수)
+                for i, row in enumerate(dept_comparison.itertuples()):
+                    ax.text(row.인원당건수 + 0.1, i, 
+                           f"{row.인원당건수:.1f}건/인", 
                            va='center', fontsize=8)
 
-                ax.set_xlabel('인원당 수리시간 (시간)')
+                ax.set_xlabel('인원당 정비 건수')
                 plt.tight_layout()
 
                 st.pyplot(fig, use_container_width=True)
-                st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당수리시간.png', '소속별 인원당수리시간 다운로드'), unsafe_allow_html=True)
-            else:
-                st.warning("수리시간 데이터가 없습니다.")
-    else:
-        with col2:
-            st.warning("정비자 소속 정보가 없습니다.")
-        with col3:
-            st.warning("정비자 소속 정보가 없습니다.")
-            
+                st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당정비건수.png', '소속별 인원당정비건수 다운로드'), unsafe_allow_html=True)
+
     st.markdown("---")
 
 # 수리비 대시보드 표시 함수 (수정됨)
@@ -1295,19 +1332,16 @@ def display_maintenance_text_analysis(df, maintenance_type=None):
 
 # 데이터가 로드된 경우 분석 시작
 if df1 is not None or df3 is not None:
-    # 메뉴 선택 - 정비일지와 수리비 대시보드 분리
+    # 메뉴 선택 - 정비일지 대시보드로 통합
     menu_options = []
 
     if df1 is not None:
-        menu_options.append("정비일지 대시보드")
+        menu_options.append("정비일지 대시보드")  # 통합된 대시보드
         menu_options.extend(["고장 유형 분석", "브랜드/모델 분석", "정비내용 분석", "고장 예측"])
-
-    if df3 is not None:
-        menu_options.append("수리비 대시보드")
 
     # 원하는 순서대로 메뉴를 정렬
     sorted_menu_options = []
-    desired_order = ["정비일지 대시보드", "수리비 대시보드", "고장 유형 분석", "브랜드/모델 분석", "정비내용 분석", "고장 예측"]
+    desired_order = ["정비일지 대시보드", "고장 유형 분석", "브랜드/모델 분석", "정비내용 분석", "고장 예측"]
 
     for item in desired_order:
         if item in menu_options:
@@ -1361,10 +1395,6 @@ if df1 is not None or df3 is not None:
             # 정비구분 컬럼이 없는 경우 전체 데이터만 표시
             st.header("정비 현황")
             display_maintenance_dashboard(df1, "전체")
-
-    elif menu == "수리비 대시보드":
-        st.title("수리비 대시보드")
-        display_repair_cost_dashboard(df3)
 
     elif menu == "고장 유형 분석":
         st.title("고장 유형 분석")
@@ -2222,11 +2252,10 @@ else:
     ### 분석 메뉴
     
     1. **정비일지 대시보드**: 정비일지 데이터 기반의 AS 분석 (정비구분별 탭 제공)
-    2. **수리비 대시보드**: 수리비 데이터 기반의 비용 분석
-    3. **고장 유형 분석**: 고장 유형 분포 및 브랜드-모델별 고장 패턴 히트맵
-    4. **브랜드/모델 분석**: 브랜드 및 모델별 특성 분석
-    5. **정비내용 분석**: 정비내용 워드클라우드 및 분류별 정비내용 분석
-    6. **고장 예측**: 기계학습 모델을 활용한 재정비 기간 및 증상 예측
+    2. **고장 유형 분석**: 고장 유형 분포 및 브랜드-모델별 고장 패턴 히트맵
+    3. **브랜드/모델 분석**: 브랜드 및 모델별 특성 분석
+    4. **정비내용 분석**: 정비내용 워드클라우드 및 분류별 정비내용 분석
+    5. **고장 예측**: 기계학습 모델을 활용한 재정비 기간 및 증상 예측
     
     ### 필요한 파일
     

@@ -322,8 +322,6 @@ def merge_dataframes(df1, df2):
                                             merged_df.loc[mask, '정비대상'].astype(str) + '_' + 
                                             merged_df.loc[mask, '정비작업'].astype(str))
 
-        # 디버깅: 브랜드 정보 출력
-        st.sidebar.info(f"병합 후 브랜드 유니크 값: {merged_df['브랜드'].nunique()}")
         if merged_df['브랜드'].nunique() < 2:
             st.sidebar.warning("브랜드 값이 너무 적습니다. 병합이 제대로 되지 않았을 수 있습니다.")
 
@@ -362,7 +360,6 @@ try:
     # 컬럼명 정리 (자산데이터도 동일하게 처리)
     df2.columns = [str(col).strip().replace('\n', '') for col in df2.columns]
     
-    st.sidebar.success("자산조회 데이터가 로드되었습니다.")
 except Exception as e:
     df2 = None
     st.sidebar.warning(f"자산조회 데이터를 로드할 수 없습니다: {e}")
@@ -375,19 +372,14 @@ try:
     # 컬럼명 정리
     df4.columns = [str(col).strip().replace('\n', '') for col in df4.columns]
     
-    st.sidebar.success("조직도 데이터가 로드되었습니다.")
 except Exception as e:
     df4 = None
     st.sidebar.warning(f"조직도 데이터를 로드할 수 없습니다: {e}")
 
 # 데이터 병합 및 전처리
 if df1 is not None:
-    # 정비일지 데이터 기본 정보 출력
-    st.sidebar.info(f"정비일지 데이터: {len(df1)}개 행")
-    
-    # 자산 데이터와 병합
+
     if df2 is not None:
-        st.sidebar.info(f"자산 데이터: {len(df2)}개 행")
         
         # 병합 전 브랜드 컬럼 존재 여부 확인
         has_brand_before = '브랜드' in df1.columns
@@ -399,8 +391,6 @@ if df1 is not None:
         # 자산 데이터 브랜드 확인
         if '제조사명' in df2.columns:
             brand_asset_counts = df2['제조사명'].value_counts()
-            st.sidebar.write("자산 데이터 브랜드 분포:")
-            st.sidebar.write(brand_asset_counts.head(3))
         
         # 자산 데이터와 병합
         df1 = merge_dataframes(df1, df2)
@@ -418,9 +408,6 @@ if df1 is not None:
             # 브랜드 매핑률 계산
             mapped_brands = len(df1) - (brand_counts.get('기타', 0) if '기타' in brand_counts.index else 0)
             mapping_rate = (mapped_brands / len(df1)) * 100
-            st.sidebar.info(f"브랜드 매핑률: {mapping_rate:.1f}%")
-        else:
-            st.sidebar.warning("브랜드 컬럼이 없습니다. 데이터 병합 과정에 문제가 있습니다.")
 
     # 최근 정비일자 계산
     df1 = calculate_previous_maintenance_dates(df1)
@@ -474,7 +461,7 @@ if df3 is not None:
     except Exception as e:
         st.warning(f"수리비 데이터 전처리 중 오류가 발생했습니다: {e}")
 
-# 정비일지 대시보드 표시 함수
+# 정비일지 대시보드 표시 함수 (수정됨)
 def display_maintenance_dashboard(df, category_name):
     # 지표 카드용 컬럼 생성
     col1, col2, col3, col4 = st.columns(4)
@@ -651,26 +638,47 @@ def display_maintenance_dashboard(df, category_name):
             st.warning("지역 정보가 없습니다.")
 
     # 정비자 소속별 분석은 col2와 col3에 배치
-    if '정비자소속' in df.columns:
+    if '정비자소속' in df.columns and df4 is not None:
         with col2:
             st.subheader("정비자 소속별 건수")
-            # 소속별 정비 건수 및 비율
+            
+            # 전체 소속별 인원수 계산
+            total_staff_by_dept = df4['소속'].value_counts()
+            total_staff = len(df4)
+            
+            # 정비 소속별 건수 및 비율
             dept_counts = df['정비자소속'].value_counts().head(10)
-            # 전체 건수 대비 비율 계산
-            dept_ratio = (dept_counts / dept_counts.sum() * 100).round(1)
+            
+            # 소속별 정비 건수 및 인원 비율 계산
+            dept_comparison = pd.DataFrame({
+                '소속': dept_counts.index,
+                '정비건수': dept_counts.values,
+                '소속인원수': [total_staff_by_dept.get(dept, 0) for dept in dept_counts.index]
+            })
+            
+            # 인원이 0이면 1로 설정하여 나누기 오류 방지
+            dept_comparison['소속인원수'] = dept_comparison['소속인원수'].replace(0, 1)
+            
+            # 인원당 정비 건수 계산
+            dept_comparison['인원당건수'] = (dept_comparison['정비건수'] / dept_comparison['소속인원수']).round(1)
+            
+            # 결과 소트
+            dept_comparison = dept_comparison.sort_values('인원당건수', ascending=False)
 
             fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-            sns.barplot(x=dept_counts.values, y=dept_counts.index, ax=ax, palette="Blues_r")
+            sns.barplot(x=dept_comparison['인원당건수'], y=dept_comparison['소속'], ax=ax, palette="Blues_r")
 
-            # 막대 위에 텍스트 표시 (건수와 비율 함께 표시)
-            for i, (v, r) in enumerate(zip(dept_counts.values, dept_ratio.values)):
-                ax.text(v + 0.5, i, f"{v} ({r:.1f}%)", va='center')
+            # 막대 위에 텍스트 표시 (인원당 건수, 총 건수, 소속 인원수)
+            for i, row in enumerate(dept_comparison.itertuples()):
+                ax.text(row.인원당건수 + 0.1, i, 
+                       f"{row.인원당건수:.1f}건/인 (총 {row.정비건수}건, {row.소속인원수}명)", 
+                       va='center', fontsize=8)
 
-            ax.set_xlabel('정비 건수 (비율)')
+            ax.set_xlabel('인원당 정비 건수')
             plt.tight_layout()
 
             st.pyplot(fig, use_container_width=True)
-            st.markdown(get_image_download_link(fig, f'{category_name}_소속별_정비건수.png', '소속별 정비건수 다운로드'), unsafe_allow_html=True)
+            st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당정비건수.png', '소속별 인원당정비건수 다운로드'), unsafe_allow_html=True)
 
         with col3:
             st.subheader("정비자 소속별 수리시간")
@@ -678,22 +686,37 @@ def display_maintenance_dashboard(df, category_name):
             if '수리시간' in df.columns:
                 # 소속별 총 수리시간 계산
                 dept_total_repair_time = df.groupby('정비자소속')['수리시간'].sum().sort_values(ascending=False).head(10)
-                # 전체 수리시간 대비 비율 계산
-                total_repair_time = df['수리시간'].sum()
-                dept_repair_ratio = (dept_total_repair_time / total_repair_time * 100).round(1)
+                
+                # 소속별 데이터 통합
+                dept_time_comparison = pd.DataFrame({
+                    '소속': dept_total_repair_time.index,
+                    '총수리시간': dept_total_repair_time.values,
+                    '소속인원수': [total_staff_by_dept.get(dept, 0) for dept in dept_total_repair_time.index]
+                })
+                
+                # 인원이 0이면 1로 설정
+                dept_time_comparison['소속인원수'] = dept_time_comparison['소속인원수'].replace(0, 1)
+                
+                # 인원당 수리시간 계산
+                dept_time_comparison['인원당수리시간'] = (dept_time_comparison['총수리시간'] / dept_time_comparison['소속인원수']).round(1)
+                
+                # 정렬
+                dept_time_comparison = dept_time_comparison.sort_values('인원당수리시간', ascending=False)
 
                 fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-                sns.barplot(x=dept_total_repair_time.values, y=dept_total_repair_time.index, ax=ax, palette="Blues_r")
+                sns.barplot(x=dept_time_comparison['인원당수리시간'], y=dept_time_comparison['소속'], ax=ax, palette="Blues_r")
 
-                # 막대 위에 텍스트 표시 (시간과 비율)
-                for i, (v, r) in enumerate(zip(dept_total_repair_time.values, dept_repair_ratio.values)):
-                    ax.text(v + 0.1, i, f"{v:.1f}시간 ({r:.1f}%)", va='center')
+                # 막대 위에 텍스트 표시
+                for i, row in enumerate(dept_time_comparison.itertuples()):
+                    ax.text(row.인원당수리시간 + 0.1, i, 
+                           f"{row.인원당수리시간:.1f}시간/인 (총 {row.총수리시간:.1f}시간, {row.소속인원수}명)", 
+                           va='center', fontsize=8)
 
-                ax.set_xlabel('총 수리시간 (비율)')
+                ax.set_xlabel('인원당 수리시간 (시간)')
                 plt.tight_layout()
 
                 st.pyplot(fig, use_container_width=True)
-                st.markdown(get_image_download_link(fig, f'{category_name}_소속별_총수리시간.png', '소속별 총수리시간 다운로드'), unsafe_allow_html=True)
+                st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당수리시간.png', '소속별 인원당수리시간 다운로드'), unsafe_allow_html=True)
             else:
                 st.warning("수리시간 데이터가 없습니다.")
     else:
@@ -704,7 +727,7 @@ def display_maintenance_dashboard(df, category_name):
             
     st.markdown("---")
 
-# 수리비 대시보드 표시 함수
+# 수리비 대시보드 표시 함수 (수정됨)
 def display_repair_cost_dashboard(df):
     if df is None:
         st.warning("수리비 데이터가 없습니다.")
@@ -721,18 +744,14 @@ def display_repair_cost_dashboard(df):
         st.warning("비용 관련 컬럼을 찾을 수 없습니다.")
         return
     
-    # 기본 지표
-    col1, col2, col3, col4 = st.columns(4)
+    # 기본 지표 (총 수리비용 제거함)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         total_cases = len(df)
         st.metric("총 수리 건수", f"{total_cases:,}")
 
     with col2:
-        total_cost = df[cost_col].sum()
-        st.metric("총 수리비용", f"{total_cost:,.0f}원")
-
-    with col3:
         if '출고일자' in df.columns:
             last_month = df['출고일자'].max().strftime('%Y-%m')
             last_month_count = df[df['출고일자'].dt.strftime('%Y-%m') == last_month].shape[0]
@@ -740,27 +759,19 @@ def display_repair_cost_dashboard(df):
         else:
             st.metric("최근 월 수리 건수", "데이터 없음")
     
-    with col4:
+    with col3:
         if '출고자소속' in df.columns:
             dept_counts = df['출고자소속'].value_counts()
             top_dept = dept_counts.index[0] if not dept_counts.empty else "정보 없음"
             top_dept_count = dept_counts.iloc[0] if not dept_counts.empty else 0
             st.metric("최다 출고 소속", f"{top_dept} ({top_dept_count}건)")
-            
-            dept_costs = df.groupby('출고자소속')[cost_col].sum()
-            top_dept_cost = dept_costs.idxmax() if not dept_costs.empty else "정보 없음"
-            dept_cost_value = dept_costs.max() if not dept_costs.empty else 0
-            dept_cost_ratio = (dept_cost_value / total_cost * 100) if total_cost > 0 else 0
-            st.metric("최다 지출 소속", f"{top_dept_cost} ({dept_cost_value:,.0f}원, {dept_cost_ratio:.1f}%)")
         else:
             st.metric("최다 출고 소속", "데이터 없음")
-            st.metric("최다 지출 소속", "데이터 없음")
 
     st.markdown("---")
 
-    # 월별 수리 비용 분석
-    st.subheader("월별 수리 비용 분석")
-    col1, col2 = st.columns(2)
+    # 요청대로 월별 수리 건수, 월별 수리 비용, 소속별 수리 비용 현황을 한 줄에 배치
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         st.subheader("월별 수리 건수")
@@ -793,17 +804,13 @@ def display_repair_cost_dashboard(df):
             monthly_costs = df_time.groupby('월')[cost_col].sum().reset_index()
             monthly_costs['월'] = monthly_costs['월'].astype(str)
             
-            # 총 비용 대비 비율 계산
-            total_cost = df_time[cost_col].sum()
-            monthly_costs['비율'] = (monthly_costs[cost_col] / total_cost * 100).round(1)
-
+            # % 제거
             fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
             sns.barplot(x='월', y=cost_col, data=monthly_costs, ax=ax, palette='Purples')
 
-            # 막대 위에 텍스트 표시 (비용과 비율)
-            for i, (v, r) in enumerate(zip(monthly_costs[cost_col], monthly_costs['비율'])):
-                ax.text(i, v + max(monthly_costs[cost_col]) * 0.01, 
-                       f"{v:,.0f}\n({r:.1f}%)", ha='center', fontsize=8)
+            # 막대 위에 텍스트 표시 (비용만)
+            for i, v in enumerate(monthly_costs[cost_col]):
+                ax.text(i, v + max(monthly_costs[cost_col]) * 0.01, f"{v:,.0f}", ha='center', fontsize=8)
 
             plt.xticks(rotation=45)
             ax.set_ylabel('비용 (원)')
@@ -811,112 +818,78 @@ def display_repair_cost_dashboard(df):
 
             st.pyplot(fig, use_container_width=True)
             st.markdown(get_image_download_link(fig, '월별_수리_비용.png', '월별 수리 비용 다운로드'), unsafe_allow_html=True)
-    
-    # 누적 수리 비용 그래프
-    st.subheader("누적 수리 비용")
-    if '출고일자' in df.columns and cost_col:
-        df_time = df.copy()
-        df_time['월'] = df_time['출고일자'].dt.to_period('M')
-
-        monthly_costs = df_time.groupby('월')[cost_col].sum().reset_index()
-        monthly_costs = monthly_costs.sort_values('월')
-        monthly_costs['월'] = monthly_costs['월'].astype(str)
-        
-        # 누적 비용 계산
-        monthly_costs['누적비용'] = monthly_costs[cost_col].cumsum()
-        
-        fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
-        
-        # 누적 그래프 (선)
-        ax.plot(monthly_costs['월'], monthly_costs['누적비용'], marker='o', 
-               color='purple', linewidth=2)
-        
-        # 텍스트 표시 (몇 개만)
-        step = max(1, len(monthly_costs) // 5)
-        for i in range(0, len(monthly_costs), step):
-            ax.text(i, monthly_costs['누적비용'].iloc[i] + max(monthly_costs['누적비용']) * 0.02,
-                   f"{monthly_costs['누적비용'].iloc[i]:,.0f}", ha='center', fontsize=8)
-        
-        # 마지막 값은 항상 표시
-        ax.text(len(monthly_costs)-1, monthly_costs['누적비용'].iloc[-1] + max(monthly_costs['누적비용']) * 0.02,
-               f"{monthly_costs['누적비용'].iloc[-1]:,.0f}", ha='center', fontsize=8)
-        
-        plt.xticks(rotation=45)
-        ax.set_ylabel('누적 비용 (원)')
-        plt.tight_layout()
-        
-        st.pyplot(fig, use_container_width=True)
-        st.markdown(get_image_download_link(fig, '누적_수리_비용.png', '누적 수리 비용 다운로드'), unsafe_allow_html=True)
-
-    st.markdown("---")
-
-    # 소속별 수리비 분석
-    if '출고자소속' in df.columns:
-        st.subheader("소속별 수리 비용 현황")
-        
-        # 소속별 수리 비용 및 비율
-        dept_costs = df.groupby('출고자소속')[cost_col].sum().sort_values(ascending=False).head(10)
-        dept_ratio = (dept_costs / total_cost * 100).round(1)
-        
-        fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-        sns.barplot(x=dept_costs.values, y=dept_costs.index, ax=ax, palette="Purples_r")
-        
-        # 막대 위에 텍스트 표시 (비용과 비율)
-        for i, (v, r) in enumerate(zip(dept_costs.values, dept_ratio.values)):
-            ax.text(v + max(dept_costs.values) * 0.01, i, f"{v:,.0f}원 ({r:.1f}%)", va='center', fontsize=8)
-        
-        ax.set_xlabel('수리 비용 (원)')
-        plt.tight_layout()
-        
-        st.pyplot(fig, use_container_width=True)
-        st.markdown(get_image_download_link(fig, '소속별_수리비용.png', '소속별 수리비용 다운로드'), unsafe_allow_html=True)
-    
-        # 소속별 수리 건수
-        st.subheader("소속별 수리 건수")
-        dept_counts = df['출고자소속'].value_counts().head(10)
-        
-        fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-        sns.barplot(x=dept_counts.values, y=dept_counts.index, ax=ax, palette="Purples_r")
-        
-        # 막대 위에 텍스트 표시
-        for i, v in enumerate(dept_counts.values):
-            ax.text(v + 0.5, i, str(v), va='center')
-        
-        ax.set_xlabel('수리 건수')
-        plt.tight_layout()
-        
-        st.pyplot(fig, use_container_width=True)
-        st.markdown(get_image_download_link(fig, '소속별_수리건수.png', '소속별 수리건수 다운로드'), unsafe_allow_html=True)
-    
-    # 신규 요구사항: 단가가 비싼 모델명 분석
-    if '모델명' in df.columns and '단가' in df.columns:
-        st.subheader("단가별 모델 분석")
-        
-        # 모델별 평균 단가 계산
-        model_prices = df.groupby('모델명')['단가'].mean().sort_values(ascending=False).head(15)
-        
-        # 높은 단가 모델 Top 15
-        st.subheader("고가 모델 Top 15")
-        
-        fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
-        sns.barplot(x=model_prices.values, y=model_prices.index, ax=ax, palette="Purples_r")
-        
-        # 막대 위에 텍스트 표시
-        for i, v in enumerate(model_prices.values):
-            ax.text(v + max(model_prices.values) * 0.01, i, f"{v:,.0f}원", va='center', fontsize=8)
-        
-        ax.set_xlabel('평균 단가 (원)')
-        plt.tight_layout()
-        
-        st.pyplot(fig, use_container_width=True)
-        st.markdown(get_image_download_link(fig, '고가모델_Top15.png', '고가모델 Top15 다운로드'), unsafe_allow_html=True)
-        
-        # 고가 모델 Top 5에 대한 소속별 지출 분석
-        if '출고자소속' in df.columns and '출고금액' in df.columns:
-            st.subheader("고가 모델별 소속 지출")
             
+    with col3:
+        # 소속별 수리비 분석
+        if '출고자소속' in df.columns and df4 is not None:
+            st.subheader("소속별 수리 비용 현황")
+            
+            # 전체 소속별 인원수 계산
+            total_staff_by_dept = df4['소속'].value_counts()
+            total_staff = len(df4)
+            
+            # 소속별 수리 비용
+            dept_costs = df.groupby('출고자소속')[cost_col].sum().sort_values(ascending=False).head(10)
+            
+            # 소속별 수리 비용 및 인원 비율 계산
+            dept_comparison = pd.DataFrame({
+                '소속': dept_costs.index,
+                '총수리비용': dept_costs.values,
+                '소속인원수': [total_staff_by_dept.get(dept, 0) for dept in dept_costs.index]
+            })
+            
+            # 인원이 0이면 1로 설정하여 나누기 오류 방지
+            dept_comparison['소속인원수'] = dept_comparison['소속인원수'].replace(0, 1)
+            
+            # 인원당 수리 비용 계산
+            dept_comparison['인원당비용'] = (dept_comparison['총수리비용'] / dept_comparison['소속인원수']).round(0)
+            
+            # 결과 소트
+            dept_comparison = dept_comparison.sort_values('인원당비용', ascending=False)
+            
+            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+            sns.barplot(x=dept_comparison['인원당비용'], y=dept_comparison['소속'], ax=ax, palette="Purples_r")
+            
+            # 막대 위에 텍스트 표시 (인원당 비용, 총 비용, 소속 인원수)
+            for i, row in enumerate(dept_comparison.itertuples()):
+                ax.text(row.인원당비용 + 100, i, 
+                       f"{row.인원당비용:,.0f}원/인 (총 {row.총수리비용:,.0f}원, {row.소속인원수}명)", 
+                       va='center', fontsize=8)
+            
+            ax.set_xlabel('인원당 수리 비용 (원)')
+            plt.tight_layout()
+            
+            st.pyplot(fig, use_container_width=True)
+            st.markdown(get_image_download_link(fig, '소속별_인원당수리비용.png', '소속별 인원당수리비용 다운로드'), unsafe_allow_html=True)
+        else:
+            st.warning("소속 정보가 없습니다.")
+    
+    # 고가 부품과 소속별 고가 부품 지출을 한 줄에 배치
+    if '모델명' in df.columns and '단가' in df.columns and '출고자소속' in df.columns and '출고금액' in df.columns:
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("고가 부품")
+            # 모델별 평균 단가 계산
+            model_prices = df.groupby('모델명')['단가'].mean().sort_values(ascending=False).head(15)
+            
+            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+            sns.barplot(x=model_prices.values, y=model_prices.index, ax=ax, palette="Purples_r")
+            
+            # 막대 위에 텍스트 표시
+            for i, v in enumerate(model_prices.values):
+                ax.text(v + max(model_prices.values) * 0.01, i, f"{v:,.0f}원", va='center', fontsize=8)
+            
+            ax.set_xlabel('평균 단가 (원)')
+            plt.tight_layout()
+            
+            st.pyplot(fig, use_container_width=True)
+            st.markdown(get_image_download_link(fig, '고가부품_Top15.png', '고가부품 Top15 다운로드'), unsafe_allow_html=True)
+        
+        with col2:
+            st.subheader("소속별 고가 부품 지출")
             # Top 5 고가 모델만 필터링
-            top_models = model_prices.head(5).index.tolist()
+            top_models = model_prices.head(15).index.tolist()
             high_cost_df = df[df['모델명'].isin(top_models)]
             
             # 소속별, 모델별 총 지출 계산

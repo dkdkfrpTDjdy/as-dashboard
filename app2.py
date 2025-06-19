@@ -2051,6 +2051,7 @@ if df1 is not None or df3 is not None:
                 else:
                     st.info("외부 정비 데이터가 없습니다.")
         else:
+            
             # 정비구분 컬럼이 없는 경우 전체 데이터만 표시
             display_maintenance_text_analysis(df1, None)
 

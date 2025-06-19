@@ -219,7 +219,6 @@ def load_data(file):
                     '중분류': '정비대상',
                     '소분류': '정비작업'
                 }, inplace=True)
-
                 
             # 고장유형 조합
             if all(col in df.columns for col in ['작업유형', '정비대상', '정비작업']):
@@ -228,6 +227,11 @@ def load_data(file):
                 df.loc[mask, '고장유형'] = (df.loc[mask, '작업유형'].astype(str) + '_' + 
                                          df.loc[mask, '정비대상'].astype(str) + '_' + 
                                          df.loc[mask, '정비작업'].astype(str))
+
+            if '제조사명' in df.columns:
+                df['브랜드'] = df['제조사명'].fillna('기타')
+            else:
+                df['브랜드'] = '기타'
 
         except Exception as e:
             st.warning(f"일부 데이터 전처리 중 오류가 발생했습니다: {e}")
@@ -258,21 +262,6 @@ def merge_dataframes(df1, df2):
             
         # 관리번호 컬럼을 기준으로 왼쪽 조인으로 병합 (AS 데이터는 모두 유지)
         merged_df = pd.merge(df1, df2_subset, on='관리번호', how='left')
-        
-        # 제조사명을 브랜드로 매핑 (기존 브랜드 컬럼이 없거나 NaN인 경우만)
-        if '제조사명' in merged_df.columns:
-            # 1. 브랜드 컬럼이 없으면 새로 만들기
-            if '브랜드' not in merged_df.columns:
-                merged_df['브랜드'] = merged_df['제조사명']
-            else:
-                # 2. 기존 브랜드 컬럼이 있으면, NaN값만 제조사명으로 채우기
-                merged_df['브랜드'] = merged_df['브랜드'].fillna(merged_df['제조사명'])
-            
-            # 3. 브랜드 컬럼의 NaN값을 '기타'로 대체
-            merged_df['브랜드'] = merged_df['브랜드'].fillna('기타')
-            
-            # 브랜드 컬럼 데이터 확인
-            print(f"브랜드 유니크 값: {merged_df['브랜드'].value_counts().head()}")
             
         # 자재내역 컬럼 분할 (있는 경우만)
         if '자재내역' in merged_df.columns and merged_df['자재내역'].notna().any():

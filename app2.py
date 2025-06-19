@@ -111,66 +111,6 @@ def group_small_categories(series, threshold=0.03):
         return pd.concat([series[~mask], others])
     return series
 
-# 두 데이터프레임 병합 함수 - 수정: 브랜드 매핑 개선
-def merge_dataframes(df1, df2):
-    if df1 is None or df2 is None:
-        return None
-
-    try:
-        # 필요한 컬럼만 선택 (자산조회 데이터)
-        df2_subset = df2[['관리번호', '제조사명', '제조년도', '취득가', '자재내역']]
-        
-        # 중복 관리번호 확인 (디버깅용)
-        if df2_subset['관리번호'].duplicated().any():
-            print(f"경고: 자산조회 데이터에 중복된 관리번호가 있습니다: {df2_subset['관리번호'].duplicated().sum()}개")
-            # 중복 제거 (첫 번째 값 유지)
-            df2_subset = df2_subset.drop_duplicates(subset='관리번호')
-            
-        # 관리번호 컬럼을 기준으로 왼쪽 조인으로 병합 (AS 데이터는 모두 유지)
-        merged_df = pd.merge(df1, df2_subset, on='관리번호', how='left')
-        
-        # 제조사명을 브랜드로 매핑 (기존 브랜드 컬럼이 없거나 NaN인 경우만)
-        if '제조사명' in merged_df.columns:
-            # 1. 브랜드 컬럼이 없으면 새로 만들기
-            if '브랜드' not in merged_df.columns:
-                merged_df['브랜드'] = merged_df['제조사명']
-            else:
-                # 2. 기존 브랜드 컬럼이 있으면, NaN값만 제조사명으로 채우기
-                merged_df['브랜드'] = merged_df['브랜드'].fillna(merged_df['제조사명'])
-            
-            # 3. 브랜드 컬럼의 NaN값을 '기타'로 대체
-            merged_df['브랜드'] = merged_df['브랜드'].fillna('기타')
-            
-            # 브랜드 컬럼 데이터 확인
-            print(f"브랜드 유니크 값: {merged_df['브랜드'].value_counts().head()}")
-            
-        # 자재내역 컬럼 분할 (있는 경우만)
-        if '자재내역' in merged_df.columns and merged_df['자재내역'].notna().any():
-            # 자재내역에서 추가 정보 추출 (공백으로 나누기)
-            split_result = merged_df['자재내역'].str.split(' ', n=3, expand=True)
-            # 결과가 있을 때만 컬럼 추가
-            if len(split_result.columns) >= 4:
-                merged_df[['연료', '운전방식', '적재용량', '마스트']] = split_result
-            else:
-                # 결과 컬럼 수가 부족한 경우 빈 컬럼 생성
-                for i, col_name in enumerate(['연료', '운전방식', '적재용량', '마스트']):
-                    if i < len(split_result.columns):
-                        merged_df[col_name] = split_result[i]
-                    else:
-                        merged_df[col_name] = None
-
-        # 브랜드_모델 컬럼 재생성
-        if '브랜드' in merged_df.columns and '모델명' in merged_df.columns:
-            mask = merged_df['브랜드'].notna() & merged_df['모델명'].notna()
-            merged_df.loc[mask, '브랜드_모델'] = merged_df.loc[mask, '브랜드'].astype(str) + '_' + merged_df.loc[mask, '모델명'].astype(str)
-
-        return merged_df
-    except Exception as e:
-        import traceback
-        error_details = traceback.format_exc()
-        st.error(f"데이터 병합 중 오류 발생: {e}\n\n{error_details}")
-        return df1  # 오류 발생시 원본 데이터프레임 반환
-
 # 최근 정비일자 계산 함수 (관리번호 기준)
 def calculate_previous_maintenance_dates(df):
     if '관리번호' not in df.columns or '정비일자' not in df.columns:
@@ -296,6 +236,70 @@ def load_data(file):
     except Exception as e:
         st.error(f"파일 로드 오류: {e}")
         return None
+
+# 두 데이터프레임 병합 함수 - 수정: 브랜드 매핑 개선
+def merge_dataframes(df1, df2):
+    if df1 is None or df2 is None:
+        return None
+
+    try:
+        # 필요한 컬럼만 선택 (자산조회 데이터)
+        df2_subset = df2[['관리번호', '제조사명', '제조년도', '취득가', '자재내역']]
+        
+        # 데이터 타입 통일 - 관리번호를 문자열로 변환 (추가된 부분)
+        df1['관리번호'] = df1['관리번호'].astype(str)
+        df2_subset['관리번호'] = df2_subset['관리번호'].astype(str)
+        
+        # 중복 관리번호 확인 (디버깅용)
+        if df2_subset['관리번호'].duplicated().any():
+            print(f"경고: 자산조회 데이터에 중복된 관리번호가 있습니다: {df2_subset['관리번호'].duplicated().sum()}개")
+            # 중복 제거 (첫 번째 값 유지)
+            df2_subset = df2_subset.drop_duplicates(subset='관리번호')
+            
+        # 관리번호 컬럼을 기준으로 왼쪽 조인으로 병합 (AS 데이터는 모두 유지)
+        merged_df = pd.merge(df1, df2_subset, on='관리번호', how='left')
+        
+        # 제조사명을 브랜드로 매핑 (기존 브랜드 컬럼이 없거나 NaN인 경우만)
+        if '제조사명' in merged_df.columns:
+            # 1. 브랜드 컬럼이 없으면 새로 만들기
+            if '브랜드' not in merged_df.columns:
+                merged_df['브랜드'] = merged_df['제조사명']
+            else:
+                # 2. 기존 브랜드 컬럼이 있으면, NaN값만 제조사명으로 채우기
+                merged_df['브랜드'] = merged_df['브랜드'].fillna(merged_df['제조사명'])
+            
+            # 3. 브랜드 컬럼의 NaN값을 '기타'로 대체
+            merged_df['브랜드'] = merged_df['브랜드'].fillna('기타')
+            
+            # 브랜드 컬럼 데이터 확인
+            print(f"브랜드 유니크 값: {merged_df['브랜드'].value_counts().head()}")
+            
+        # 자재내역 컬럼 분할 (있는 경우만)
+        if '자재내역' in merged_df.columns and merged_df['자재내역'].notna().any():
+            # 자재내역에서 추가 정보 추출 (공백으로 나누기)
+            split_result = merged_df['자재내역'].str.split(' ', n=3, expand=True)
+            # 결과가 있을 때만 컬럼 추가
+            if len(split_result.columns) >= 4:
+                merged_df[['연료', '운전방식', '적재용량', '마스트']] = split_result
+            else:
+                # 결과 컬럼 수가 부족한 경우 빈 컬럼 생성
+                for i, col_name in enumerate(['연료', '운전방식', '적재용량', '마스트']):
+                    if i < len(split_result.columns):
+                        merged_df[col_name] = split_result[i]
+                    else:
+                        merged_df[col_name] = None
+
+        # 브랜드_모델 컬럼 재생성
+        if '브랜드' in merged_df.columns and '모델명' in merged_df.columns:
+            mask = merged_df['브랜드'].notna() & merged_df['모델명'].notna()
+            merged_df.loc[mask, '브랜드_모델'] = merged_df.loc[mask, '브랜드'].astype(str) + '_' + merged_df.loc[mask, '모델명'].astype(str)
+
+        return merged_df
+    except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
+        st.error(f"데이터 병합 중 오류 발생: {e}\n\n{error_details}")
+        return df1  # 오류 발생시 원본 데이터프레임 반환
 
 # 변수 초기화 (한 번만 초기화)
 df1 = None  # 정비일지 데이터 (사용자 업로드)

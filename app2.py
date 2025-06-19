@@ -1681,8 +1681,6 @@ if df1 is not None or df3 is not None:
                 st.header("외부 고장 유형 분석")
                 if has_external:
                     display_fault_analysis(df1, "외부")
-                else:
-                    st.warning("마스트 데이터가 없습니다.")
                     
             # 상위 고장 유형 리스트
             st.subheader("상위 고장 유형")
@@ -1692,7 +1690,7 @@ if df1 is not None or df3 is not None:
                 '건수': top_40_faults.values
             })
             st.dataframe(fault_df)
-                    st.info("외부 정비 데이터가 없습니다.")
+
         else:
             st.warning("고장 유형 분석에 필요한 컬럼(작업유형, 정비대상, 정비작업)이 데이터에 없습니다.")
             # 정비구분 컬럼이 없는 경우 전체 데이터만

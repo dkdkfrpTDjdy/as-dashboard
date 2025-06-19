@@ -62,13 +62,13 @@ def setup_korean_font_test():
 def get_image_download_link(fig, filename, text):
     """그래프를 이미지로 변환하고 다운로드 링크 생성"""
     buf = io.BytesIO()
-    fig.savefig(buf, format='png', dpi=300, bbox_inches='tight')
+    fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
     buf.seek(0)
     b64 = base64.b64encode(buf.getvalue()).decode()
     href = f'<a href="data:image/png;base64,{b64}" download="{filename}"> {text}</a>'
     return href
 
-def create_figure_with_korean(figsize=(10, 6), dpi=300):
+def create_figure_with_korean(figsize=(10, 6), dpi=150):
     """한글 폰트가 적용된 그림 객체 생성""" 
     fig, ax = plt.subplots(figsize=figsize, dpi=dpi)
     return fig, ax
@@ -544,7 +544,7 @@ def display_maintenance_dashboard(df, category_name):
             monthly_counts['월'] = monthly_counts['월'].astype(str)
 
             # 고해상도 그래프를 위한 설정
-            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=150)
             sns.barplot(x='월', y='건수', data=monthly_counts, ax=ax, palette='Blues')
 
             # 막대 위에 텍스트 표시
@@ -572,7 +572,7 @@ def display_maintenance_dashboard(df, category_name):
             monthly_costs = df_cost.groupby('월')['수리비'].mean().reset_index()
             monthly_costs['월'] = monthly_costs['월'].astype(str)
             
-            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=150)
             sns.barplot(x='월', y='수리비', data=monthly_costs, ax=ax, palette="Blues")
             
             # 평균값 텍스트 표시
@@ -598,7 +598,7 @@ def display_maintenance_dashboard(df, category_name):
             df['수리시간_구간'] = pd.cut(df['수리시간'], bins=bins, labels=labels)
             repair_time_counts = df['수리시간_구간'].value_counts().sort_index()
 
-            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=300)
+            fig, ax = create_figure_with_korean(figsize=(10, 6), dpi=150)
             sns.barplot(x=repair_time_counts.index, y=repair_time_counts.values, ax=ax, palette="Blues")
 
             # 막대 위에 텍스트 표시
@@ -635,7 +635,7 @@ def display_maintenance_dashboard(df, category_name):
             region_counts = region_counts.sort_values(ascending=False).nlargest(15)
 
             # 시각화
-            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=150)
             blue_palette = sns.color_palette("Blues", n_colors=len(region_counts))
 
             sns.barplot(x=region_counts.index, y=region_counts.values, ax=ax, palette=blue_palette)
@@ -661,7 +661,7 @@ def display_maintenance_dashboard(df, category_name):
             # 현장별 총 수리비 계산
             site_costs = df.groupby('현장명')['수리비'].sum().sort_values(ascending=False).head(15)
             
-            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=150)
             sns.barplot(x=site_costs.values, y=site_costs.index, ax=ax, palette="Blues_r")
             
             # 막대 위에 텍스트 표시
@@ -703,7 +703,7 @@ def display_maintenance_dashboard(df, category_name):
             # 결과 소트하고 상위 15개 선택
             dept_comparison = dept_comparison.sort_values('인원당수리비', ascending=False).head(15)
             
-            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+            fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=150)
             sns.barplot(x=dept_comparison['인원당수리비'], y=dept_comparison['소속'], ax=ax, palette="Blues_r")
             
             # 막대 위에 텍스트 표시
@@ -745,7 +745,7 @@ def display_maintenance_dashboard(df, category_name):
                 # 결과 소트
                 dept_comparison = dept_comparison.sort_values('인원당건수', ascending=False)
 
-                fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+                fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=150)
                 sns.barplot(x=dept_comparison['인원당건수'], y=dept_comparison['소속'], ax=ax, palette="Blues_r")
 
                 # 막대 위에 텍스트 표시 (인원당 건수, 총 건수, 소속 인원수)
@@ -807,7 +807,7 @@ def display_fault_analysis(df, maintenance_type=None):
 
                 with col1:
                     st.markdown(f"**{colname} 분포**")
-                    fig1, ax1 = create_figure_with_korean(figsize=(8, 8), dpi=300)
+                    fig1, ax1 = create_figure_with_korean(figsize=(8, 8), dpi=150)
                     sns.barplot(x=category_counts.index, y=category_counts.values, ax=ax1, palette=f"{current_theme}_r")
                     plt.xticks(rotation=45, ha='right')
                     for i, v in enumerate(category_counts.values):
@@ -827,7 +827,7 @@ def display_fault_analysis(df, maintenance_type=None):
                         category_counts = category_counts[category_counts_ratio >= 0.05]
                         category_counts['기타'] = int(others_sum)
 
-                    fig2, ax2 = create_figure_with_korean(figsize=(8, 8), dpi=300)
+                    fig2, ax2 = create_figure_with_korean(figsize=(8, 8), dpi=150)
                     category_counts.plot(kind='pie', autopct='%1.1f%%', ax=ax2,
                                         colors=sns.color_palette(current_theme, n_colors=len(category_counts)))
                     ax2.set_ylabel('')
@@ -844,7 +844,7 @@ def display_fault_analysis(df, maintenance_type=None):
                             aggfunc='size',
                             fill_value=0
                         )
-                        fig3, ax3 = create_figure_with_korean(figsize=(8, 8), dpi=300)
+                        fig3, ax3 = create_figure_with_korean(figsize=(8, 8), dpi=150)
                         sns.heatmap(pivot_df, cmap=current_theme, annot=True, fmt='d', linewidths=0.5, ax=ax3, cbar=False)
                         plt.xticks(rotation=90)
                         plt.yticks(rotation=0)
@@ -872,7 +872,7 @@ def display_fault_analysis(df, maintenance_type=None):
                     fuel_type_counts = filtered_df['연료'].value_counts().dropna()
                     
                     if len(fuel_type_counts) > 0:
-                        fig, ax = create_figure_with_korean(figsize=(10, 9), dpi=300)
+                        fig, ax = create_figure_with_korean(figsize=(10, 9), dpi=150)
                         sns.barplot(x=fuel_type_counts.index, y=fuel_type_counts.values, ax=ax, palette=f"{current_theme}_r")
                         
                         # 막대 위에 텍스트 표시
@@ -904,7 +904,7 @@ def display_fault_analysis(df, maintenance_type=None):
                     if '고장유형' in filtered_df_fuel.columns:
                         top_faults_by_fuel = filtered_df_fuel['고장유형'].value_counts().head(10)
                         
-                        fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+                        fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=150)
                         sns.barplot(x=top_faults_by_fuel.values, y=top_faults_by_fuel.index, ax=ax, palette=f"{current_theme}_r")
                         
                         # 막대 위에 텍스트 표시
@@ -998,7 +998,7 @@ def display_maintenance_text_analysis(df, maintenance_type=None):
                     ).generate_from_frequencies(top_100_words)
 
                     # 워드클라우드 시각화
-                    fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
+                    fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=150)
                     ax.imshow(wordcloud, interpolation='bilinear')
                     ax.axis('off')
                     plt.tight_layout()
@@ -1020,7 +1020,7 @@ def display_maintenance_text_analysis(df, maintenance_type=None):
                     '빈도': list(top_100_words.values())[:30]
                 })
 
-                fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+                fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=150)
                 sns.barplot(x=word_df['빈도'], y=word_df['단어'], ax=ax, palette=f"{current_theme}_r")
                 plt.tight_layout()
 
@@ -1112,7 +1112,7 @@ def display_maintenance_text_analysis(df, maintenance_type=None):
                             ).generate_from_frequencies(filtered_top_100_words)
 
                             # 워드클라우드 시각화
-                            fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=300)
+                            fig, ax = create_figure_with_korean(figsize=(10, 10), dpi=150)
                             ax.imshow(wordcloud, interpolation='bilinear')
                             ax.axis('off')
                             plt.tight_layout()
@@ -1133,7 +1133,7 @@ def display_maintenance_text_analysis(df, maintenance_type=None):
                             '빈도': list(filtered_top_100_words.values())[:30]
                         })
 
-                        fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=300)
+                        fig, ax = create_figure_with_korean(figsize=(10, 8), dpi=150)
                         sns.barplot(x=word_df['빈도'], y=word_df['단어'], ax=ax, palette=f"{current_theme}_r")
                         plt.tight_layout()
 

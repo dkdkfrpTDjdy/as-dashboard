@@ -1,4 +1,4 @@
-## 4. pages/01_대시보드.py
+# 4. pages/01_대시보드.py
 
 import streamlit as st
 import pandas as pd
@@ -29,7 +29,7 @@ if 'df1_with_costs' not in st.session_state:
 df1 = st.session_state.df1_with_costs
 
 # 통합 대시보드 표시 함수 (정비일지 + 수리비 통합)
-def display_integrated_dashboard(df, category_name):
+def display_integrated_dashboard(df, category_name, key_prefix):
     # 지표 카드용 컬럼 생성
     col1, col2, col3, col4 = st.columns(4)
 
@@ -76,10 +76,12 @@ def display_integrated_dashboard(df, category_name):
     st.markdown("---")
     
     # 분석 섹션 선택기 (확장 가능한 섹션으로 분리)
+    # key_prefix를 추가하여 각 탭에서 고유한 ID를 가지도록 함
     sections = st.multiselect(
         "표시할 분석 섹션 선택",
         ["월별 분석", "지역별 분석", "소속별 분석", "수리비 상세 분석"],
-        default=["월별 분석", "지역별 분석", "소속별 분석"]
+        default=["월별 분석", "지역별 분석", "소속별 분석"],
+        key=f"{key_prefix}_sections"
     )
     
     # 1. 월별 분석
@@ -115,7 +117,11 @@ def display_integrated_dashboard(df, category_name):
                 
                 with col2:
                     # 가동시간 또는 수리비 선택
-                    chart_option = st.radio("차트 선택", ["월별 평균 가동시간", "월별 평균 수리비"])
+                    chart_option = st.radio(
+                        "차트 선택", 
+                        ["월별 평균 가동시간", "월별 평균 수리비"],
+                        key=f"{key_prefix}_chart_option"
+                    )
                     
                     if chart_option == "월별 평균 가동시간" and operation_col in df.columns:
                         st.subheader("월별 평균 가동시간")
@@ -458,14 +464,14 @@ if '정비구분' in df1.columns and df1['정비구분'].notna().any():
     # 전체 탭
     with tabs[0]:
         st.header("전체 정비 현황")
-        display_integrated_dashboard(df1, "전체")
+        display_integrated_dashboard(df1, "전체", "all")
 
     # 내부 탭
     with tabs[1]:
         st.header("내부 정비 현황")
         if has_internal:
             df_internal = df1[df1['정비구분'] == '내부']
-            display_integrated_dashboard(df_internal, "내부")
+            display_integrated_dashboard(df_internal, "내부", "internal")
         else:
             st.info("내부 정비 데이터가 없습니다.")
 
@@ -474,10 +480,10 @@ if '정비구분' in df1.columns and df1['정비구분'].notna().any():
         st.header("외부 정비 현황")
         if has_external:
             df_external = df1[df1['정비구분'] == '외부']
-            display_integrated_dashboard(df_external, "외부")
+            display_integrated_dashboard(df_external, "외부", "external")
         else:
             st.info("외부 정비 데이터가 없습니다.")
 else:
     # 정비구분 컬럼이 없는 경우 전체 데이터만 표시
     st.header("정비 현황")
-    display_integrated_dashboard(df1, "전체")
+    display_integrated_dashboard(df1, "전체", "all")

@@ -332,14 +332,26 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당정비건수.png', '소속별 인원당정비건수 다운로드'), unsafe_allow_html=True)
                 
                 with col2:
-                    if '수리비' in df.columns:
+                    if '수리비' in df.columns and '정비자소속' in df.columns:
                         st.subheader("정비자 소속별 수리비")
-
-                        # 유효한 데이터만 사용
-                        df_valid = df[['정비자소속', '수리비']].dropna()
-                        df_valid = df_valid[df_valid['수리비'] > 0]
-
-                        if not df_valid.empty and df_valid['정비자소속'].notna().any():
+                        
+                        # 디버깅 정보 표시
+                        total_rows = len(df)
+                        valid_cost_rows = df['수리비'].notna().sum()
+                        valid_dept_rows = df['정비자소속'].notna().sum()
+                        
+                        st.write(f"전체 데이터: {total_rows}행, 유효 수리비: {valid_cost_rows}행 ({valid_cost_rows/total_rows:.1%}), "
+                                f"유효 소속: {valid_dept_rows}행 ({valid_dept_rows/total_rows:.1%})")
+                        
+                        # 유효한 데이터만 사용 (필터링 완화)
+                        df_valid = df[['정비자소속', '수리비']].copy()
+                        # NaN 값만 제외하고 0 값은 포함
+                        df_valid = df_valid.dropna()
+                        
+                        st.write(f"필터링 후 데이터: {len(df_valid)}행 ({len(df_valid)/total_rows:.1%})")
+                        
+                        # 유효성 검사 조건 완화
+                        if not df_valid.empty:
                             # 소속별 총 수리비 계산
                             dept_total_cost = (
                                 df_valid.groupby('정비자소속')['수리비']
@@ -347,90 +359,46 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                                 .sort_values(ascending=False)
                                 .head(10)
                             )
-
-                            dept_cost_comparison = pd.DataFrame({
-                                '소속': dept_total_cost.index,
-                                '총수리비': dept_total_cost.values,
-                                '소속인원수': [total_staff_by_dept.get(dept, 0) for dept in dept_total_cost.index]
-                            })
-
-                            dept_cost_comparison['소속인원수'] = dept_cost_comparison['소속인원수'].replace(0, 1)
-                            dept_cost_comparison['인원당수리비'] = (
-                                dept_cost_comparison['총수리비'] / dept_cost_comparison['소속인원수']
-                            ).round(0)
-
-                            dept_cost_comparison = dept_cost_comparison.sort_values('인원당수리비', ascending=False)
-
-                            # 그래프 생성
-                            fig, ax = create_figure(figsize=(10, 8), dpi=150)
-                            sns.barplot(x='인원당수리비', y='소속', data=dept_cost_comparison, ax=ax, palette="Blues_r")
-
-                            for i, row in dept_cost_comparison.iterrows():
-                                if pd.notna(row['인원당수리비']):
-                                    ax.text(row['인원당수리비'] + 100, i, f"{row['인원당수리비']:,.0f}원/인)", va='center', fontsize=8)
-
-                            ax.set_xlabel('인원당 수리비 (원)')
-                            plt.tight_layout()
-
-                            st.pyplot(fig, use_container_width=True)
-                            st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당수리비.png', '소속별 인원당수리비 다운로드'), unsafe_allow_html=True)
+                            
+                            # 데이터가 있는지 한번 더 확인
+                            if not dept_total_cost.empty:
+                                dept_cost_comparison = pd.DataFrame({
+                                    '소속': dept_total_cost.index,
+                                    '총수리비': dept_total_cost.values,
+                                    '소속인원수': [total_staff_by_dept.get(dept, 0) for dept in dept_total_cost.index]
+                                })
+                                
+                                dept_cost_comparison['소속인원수'] = dept_cost_comparison['소속인원수'].replace(0, 1)
+                                dept_cost_comparison['인원당수리비'] = (
+                                    dept_cost_comparison['총수리비'] / dept_cost_comparison['소속인원수']
+                                ).round(0)
+                                
+                                dept_cost_comparison = dept_cost_comparison.sort_values('인원당수리비', ascending=False)
+                                
+                                # 그래프 생성
+                                fig, ax = create_figure(figsize=(10, 8), dpi=150)
+                                sns.barplot(x='인원당수리비', y='소속', data=dept_cost_comparison, ax=ax, palette="Blues_r")
+                                
+                                for i, row in dept_cost_comparison.iterrows():
+                                    if pd.notna(row['인원당수리비']):
+                                        ax.text(row['인원당수리비'] + 100, i, f"{row['인원당수리비']:,.0f}원/인)", va='center', fontsize=8)
+                                
+                                ax.set_xlabel('인원당 수리비 (원)')
+                                plt.tight_layout()
+                                
+                                st.pyplot(fig, use_container_width=True)
+                                st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당수리비.png', '소속별 인원당수리비 다운로드'), unsafe_allow_html=True)
+                            else:
+                                st.warning("소속별 수리비 데이터가 없습니다.")
                         else:
-                            st.warning("수리비 또는 정비자소속 데이터가 부족하여 분석할 수 없습니다.")
-
-                    elif repair_col in df.columns:
-                        st.subheader("정비자 소속별 수리시간")
-
-                        df_valid = df[['정비자소속', repair_col]].dropna()
-                        df_valid = df_valid[df_valid[repair_col] > 0]
-
-                        if not df_valid.empty and df_valid['정비자소속'].notna().any():
-                            dept_total_repair_time = (
-                                df_valid.groupby('정비자소속')[repair_col]
-                                .sum()
-                                .sort_values(ascending=False)
-                                .head(10)
-                            )
-
-                            dept_time_comparison = pd.DataFrame({
-                                '소속': dept_total_repair_time.index,
-                                '총수리시간': dept_total_repair_time.values,
-                                '소속인원수': [total_staff_by_dept.get(dept, 0) for dept in dept_total_repair_time.index]
-                            })
-
-                            dept_time_comparison['소속인원수'] = dept_time_comparison['소속인원수'].replace(0, 1)
-                            dept_time_comparison['인원당수리시간'] = (
-                                dept_time_comparison['총수리시간'] / dept_time_comparison['소속인원수']
-                            ).round(1)
-
-                            dept_time_comparison = dept_time_comparison.sort_values('인원당수리시간', ascending=False)
-
-                            # 그래프 생성
-                            fig, ax = create_figure(figsize=(10, 8), dpi=150)
-                            sns.barplot(x='인원당수리시간', y='소속', data=dept_time_comparison, ax=ax, palette="Blues_r")
-
-                            for i, row in dept_time_comparison.iterrows():
-                                if pd.notna(row['인원당수리시간']):
-                                    ax.text(row['인원당수리시간'] + 0.1, i, f"{row['인원당수리시간']:.1f}시간/인)", va='center', fontsize=8)
-
-                            ax.set_xlabel('인원당 수리시간 (시간)')
-                            plt.tight_layout()
-
-                            st.pyplot(fig, use_container_width=True)
-                            st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당수리시간.png', '소속별 인원당수리시간 다운로드'), unsafe_allow_html=True)
-                        else:
-                            st.warning("수리시간 또는 정비자소속 데이터가 부족하여 분석할 수 없습니다.")
-
+                            st.warning("유효한 수리비 또는 정비자소속 데이터가 없습니다.")
                     else:
+                        missing_cols = []
+                        if '수리비' not in df.columns:
+                            missing_cols.append("수리비")
                         if '정비자소속' not in df.columns:
-                            st.warning("정비자소속 컬럼이 없습니다.")
-                        elif 'df4' not in st.session_state:
-                            st.warning("조직도 데이터가 세션 상태에 없습니다.")
-                        elif st.session_state.df4 is None:
-                            st.warning("조직도 데이터가 None입니다.")
-                        elif '소속' not in st.session_state.df4.columns:
-                            st.warning("조직도 데이터에 '소속' 컬럼이 없습니다.")
-                        else:
-                            st.warning("정비자 소속 정보가 없습니다.")
+                            missing_cols.append("정비자소속")
+                        st.warning(f"필요한 컬럼이 없습니다: {', '.join(missing_cols)}")
 
     
     # 4. 수리비 상세 분석

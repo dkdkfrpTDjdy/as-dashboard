@@ -41,7 +41,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
 
     with col1:
         total_cases = len(df)
-        st.metric(f"{category_name} AS 건수", f"{total_cases:,}", key=f"{key_prefix}_metric_cases")
+        st.metric(f"{category_name} AS 건수", f"{total_cases:,}")
 
     with col2:
         # 가동시간 컬럼이 있는지 확인

@@ -91,7 +91,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
     
     # 1. 월별 분석
     if "월별 분석" in sections:
-        with st.expander("월별 분석", expanded=True, key=f"{key_prefix}_expander_monthly"):
+        with st.expander("월별 분석", expanded=True):
             if '정비일자' in df.columns:
                 col1, col2, col3 = st.columns(3)
                 
@@ -204,7 +204,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
     
     # 2. 지역별 분석
     if "지역별 분석" in sections:
-        with st.expander("지역별 분석", expanded=True, key=f"{key_prefix}_expander_region"):
+        with st.expander("지역별 분석", expanded=True):
             # 지역별 빈도 분석
             st.subheader("지역별 AS 건수")
             if '지역' in df.columns:
@@ -245,7 +245,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
     
     # 3. 소속별 분석
     if "소속별 분석" in sections:
-        with st.expander("소속별 분석", expanded=True, key=f"{key_prefix}_expander_dept"):
+        with st.expander("소속별 분석", expanded=True):
             # 정비자 소속별 분석
             if '정비자소속' in df.columns and 'df4' in st.session_state:
                 col1, col2 = st.columns(2)
@@ -366,7 +366,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
     
     # 4. 수리비 상세 분석
     if "수리비 상세 분석" in sections and '수리비' in df.columns:
-        with st.expander("수리비 상세 분석", expanded=True, key=f"{key_prefix}_expander_cost"):
+        with st.expander("수리비 상세 분석", expanded=True):
             st.header("수리비 상세 분석")
             
             col1, col2 = st.columns(2)

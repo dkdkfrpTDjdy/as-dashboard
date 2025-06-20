@@ -117,7 +117,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     ax.set_ylabel('건수')
                     plt.tight_layout()
                     
-                    st.pyplot(fig, use_container_width=True, key=f"{key_prefix}_fig_monthly_count")
+                    st.pyplot(fig, use_container_width=True)
                     st.markdown(get_image_download_link(fig, f'{category_name}_월별_AS_건수.png', '월별 AS 건수 다운로드'), unsafe_allow_html=True)
                 
                 with col2:
@@ -148,7 +148,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         plt.xticks(rotation=45)
                         plt.tight_layout()
                         
-                        st.pyplot(fig, use_container_width=True, key=f"{key_prefix}_fig_monthly_operation")
+                        st.pyplot(fig, use_container_width=True)
                         st.markdown(get_image_download_link(fig, f'{category_name}_월별_평균_가동시간.png', '월별 평균 가동시간 다운로드'), unsafe_allow_html=True)
                     
                     elif chart_option == "월별 평균 수리비" and '수리비' in df.columns:
@@ -172,7 +172,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         ax.set_ylabel('평균 수리비 (원)')
                         plt.tight_layout()
                         
-                        st.pyplot(fig, use_container_width=True, key=f"{key_prefix}_fig_monthly_cost")
+                        st.pyplot(fig, use_container_width=True)
                         st.markdown(get_image_download_link(fig, f'{category_name}_월별_평균_수리비.png', '월별 평균 수리비 다운로드'), unsafe_allow_html=True)
                 
                 with col3:
@@ -197,7 +197,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         
                         plt.xticks(rotation=45)
                         plt.tight_layout()
-                        st.pyplot(fig, use_container_width=True, key=f"{key_prefix}_fig_repair_time")
+                        st.pyplot(fig, use_container_width=True)
                         st.markdown(get_image_download_link(fig, f'{category_name}_수리시간_분포.png', '수리시간 분포 다운로드'), unsafe_allow_html=True)
             else:
                 st.warning("정비일자 컬럼이 없어 월별 분석을 수행할 수 없습니다.")
@@ -236,7 +236,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     
                     plt.tight_layout()
                     plt.xticks(rotation=45)
-                    st.pyplot(fig, use_container_width=True, key=f"{key_prefix}_fig_region")
+                    st.pyplot(fig, use_container_width=True)
                     
                     # 다운로드 링크 추가
                     st.markdown(get_image_download_link(fig, f'{category_name}_지역별_AS_현황.png', '지역별 AS 현황 다운로드'), unsafe_allow_html=True)
@@ -284,7 +284,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     ax.set_xlabel('인원당 정비 건수')
                     plt.tight_layout()
                     
-                    st.pyplot(fig, use_container_width=True, key=f"{key_prefix}_fig_dept_count")
+                    st.pyplot(fig, use_container_width=True)
                     st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당정비건수.png', '소속별 인원당정비건수 다운로드'), unsafe_allow_html=True)
                 
                 with col2:
@@ -322,7 +322,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         ax.set_xlabel('인원당 수리비 (원)')
                         plt.tight_layout()
                         
-                        st.pyplot(fig, use_container_width=True, key=f"{key_prefix}_fig_dept_cost")
+                        st.pyplot(fig, use_container_width=True)
                         st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당수리비.png', '소속별 인원당수리비 다운로드'), unsafe_allow_html=True)
                     
                     # 수리비 데이터가 없는 경우 수리시간 기준 그래프 표시
@@ -359,7 +359,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         ax.set_xlabel('인원당 수리시간 (시간)')
                         plt.tight_layout()
                         
-                        st.pyplot(fig, use_container_width=True, key=f"{key_prefix}_fig_dept_time")
+                        st.pyplot(fig, use_container_width=True)
                         st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당수리시간.png', '소속별 인원당수리시간 다운로드'), unsafe_allow_html=True)
             else:
                 st.warning("정비자 소속 정보가 없습니다.")
@@ -389,7 +389,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     ax.set_xlabel('총 수리비 (원)')
                     plt.tight_layout()
                     
-                    st.pyplot(fig, use_container_width=True, key=f"{key_prefix}_fig_site_cost")
+                    st.pyplot(fig, use_container_width=True)
                     st.markdown(get_image_download_link(fig, f'{category_name}_현장별_수리비_Top15.png', '현장별 수리비 Top15 다운로드'), unsafe_allow_html=True)
                 else:
                     st.warning("현장 정보가 없습니다.")
@@ -415,7 +415,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     ax.set_xlabel('총 수리비 (원)')
                     plt.tight_layout()
                     
-                    st.pyplot(fig, use_container_width=True, key=f"{key_prefix}_fig_worker_cost")
+                    st.pyplot(fig, use_container_width=True)
                     st.markdown(get_image_download_link(fig, f'{category_name}_정비자별_수리비_Top15.png', '정비자별 수리비 Top15 다운로드'), unsafe_allow_html=True)
                 else:
                     st.warning("정비자 정보가 없습니다.")
@@ -451,7 +451,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     ax.set_xlabel('사용 빈도')
                     plt.tight_layout()
                     
-                    st.pyplot(fig, use_container_width=True, key=f"{key_prefix}_fig_parts")
+                    st.pyplot(fig, use_container_width=True)
                     st.markdown(get_image_download_link(fig, f'{category_name}_자주사용부품_Top15.png', '자주 사용되는 부품 Top15 다운로드'), unsafe_allow_html=True)
                 else:
                     st.warning("부품 사용 데이터가 없습니다.")

@@ -53,9 +53,9 @@ def display_integrated_dashboard(df, category_name, key_prefix):
 
         if operation_col and df[operation_col].notna().any():
             avg_operation = df[operation_col].mean()
-            st.metric("평균 가동시간", f"{avg_operation:.2f}시간", key=f"{key_prefix}_metric_operation")
+            st.metric("평균 가동시간", f"{avg_operation:.2f}시간")
         else:
-            st.metric("평균 가동시간", "데이터 없음", key=f"{key_prefix}_metric_operation")
+            st.metric("평균 가동시간", "데이터 없음")
 
     with col3:
         # 수리시간 컬럼이 있는지 확인
@@ -67,17 +67,17 @@ def display_integrated_dashboard(df, category_name, key_prefix):
 
         if repair_col and df[repair_col].notna().any():
             avg_repair = df[repair_col].mean()
-            st.metric("평균 수리시간", f"{avg_repair:.2f}시간", key=f"{key_prefix}_metric_repair")
+            st.metric("평균 수리시간", f"{avg_repair:.2f}시간")
         else:
-            st.metric("평균 수리시간", "데이터 없음", key=f"{key_prefix}_metric_repair")
+            st.metric("평균 수리시간", "데이터 없음")
 
     with col4:
         # 수리비 평균 표시
         if '수리비' in df.columns and df['수리비'].notna().any():
             avg_cost = df['수리비'].mean()
-            st.metric("평균 수리비용", f"{avg_cost:,.0f}원", key=f"{key_prefix}_metric_cost")
+            st.metric("평균 수리비용", f"{avg_cost:,.0f}원")
         else:
-            st.metric("평균 수리비용", "데이터 없음", key=f"{key_prefix}_metric_cost")
+            st.metric("평균 수리비용", "데이터 없음")
 
     st.markdown("---")
     

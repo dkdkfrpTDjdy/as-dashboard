@@ -131,12 +131,17 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     
                     # 데이터 준비
                     df_time = df.copy()
-                    if not np.issubdtype(df['정비일자'].dtype, np.datetime64):
+                    
+                    # datetime 형식 확인 및 변환
+                    if not pd.api.types.is_datetime64_any_dtype(df_time['정비일자']):
                         try:
-                            df['정비일자'] = pd.to_datetime(df['정비일자'], errors='coerce')
+                            df_time['정비일자'] = pd.to_datetime(df_time['정비일자'], errors='coerce')
                         except Exception as e:
                             st.error(f"'정비일자' 컬럼을 datetime으로 변환하는 데 실패했습니다: {e}")
                             st.stop()
+                    
+                    # 이전에 작동했던 방식으로 월 추출
+                    df_time['월'] = df_time['정비일자'].dt.to_period('M')
                     monthly_counts = df_time.groupby('월').size().reset_index(name='건수')
                     monthly_counts['월'] = monthly_counts['월'].astype(str)
                     

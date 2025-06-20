@@ -16,6 +16,11 @@ def load_data(file):
         # 컬럼명 정리 (줄바꿈 제거 및 공백 제거)
         df.columns = [str(col).strip().replace('\n', '') for col in df.columns]
 
+        # 문자열 데이터의 줄바꿈 제거 및 공백 정리
+        for col in df.columns:
+            if df[col].dtype == 'object':  # 문자열 컬럼만 처리
+                df[col] = df[col].astype(str).apply(lambda x: x.strip().replace('\n', '') if not pd.isna(x) else x)
+        
         # 컬럼명 매핑 (정비일지 데이터인 경우)
         try:
             # 대분류, 중분류, 소분류가 있는 경우 작업유형, 정비대상, 정비작업으로 변환

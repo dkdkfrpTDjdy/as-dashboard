@@ -314,20 +314,33 @@ def merge_repair_costs(maintenance_df, parts_df):
         ]
 
         # 수리비 및 사용부품 집계
-        agg = matched.groupby(['관리번호', '정비일자']).agg({
-            '출고금액': 'sum',
-            '자재명': lambda x: ', '.join(x.dropna().unique())
-        }).reset_index().rename(columns={
-            '출고금액': '수리비',
-            '자재명': '사용부품'
-        })
+        if not matched.empty:
+            agg = matched.groupby(['관리번호', '정비일자']).agg({
+                '출고금액': 'sum',
+                '자재명': lambda x: ', '.join(x.dropna().unique())
+            }).reset_index().rename(columns={
+                '출고금액': '수리비',
+                '자재명': '사용부품'
+            })
 
-        # 원본 정비일지와 병합
-        df1 = df1.merge(agg, on=['관리번호', '정비일자'], how='left')
+            # 원본 정비일지와 병합
+            df1 = df1.merge(agg, on=['관리번호', '정비일자'], how='left')
+        else:
+            # 매칭된 데이터가 없는 경우 빈 컬럼 추가
+            df1['수리비'] = 0
+            df1['사용부품'] = ""
+            return df1
 
-        # 누락값 처리
-        df1['수리비'] = df1['수리비'].fillna(0)
-        df1['사용부품'] = df1['사용부품'].fillna("")
+        # 누락값 처리 (컬럼이 존재하는지 확인 후 처리)
+        if '수리비' in df1.columns:
+            df1['수리비'] = df1['수리비'].fillna(0)
+        else:
+            df1['수리비'] = 0
+            
+        if '사용부품' in df1.columns:
+            df1['사용부품'] = df1['사용부품'].fillna("")
+        else:
+            df1['사용부품'] = ""
 
         return df1
 
@@ -335,6 +348,9 @@ def merge_repair_costs(maintenance_df, parts_df):
         st.error(f"병합 중 오류 발생: {e}")
         import traceback
         st.error(traceback.format_exc())
+        # 오류 발생 시 원본 데이터에 빈 컬럼 추가
+        maintenance_df['수리비'] = 0
+        maintenance_df['사용부품'] = ""
         return maintenance_df
 
 # 재정비 간격 계산을 위한 날짜 처리

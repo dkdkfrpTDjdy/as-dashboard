@@ -28,6 +28,12 @@ if 'df1_with_costs' not in st.session_state:
 # 데이터 불러오기
 df1 = st.session_state.df1_with_costs
 
+# 정비구분 컬럼 전처리 (줄바꿈 제거 및 공백 정리) - 여기에 추가
+if '정비구분' in df1.columns:
+    df1['정비구분'] = df1['정비구분'].astype(str).apply(lambda x: x.strip().replace('\n', '') if not pd.isna(x) else x)
+    # NaN 값을 문자열 'nan'으로 변환한 경우 다시 NaN으로 변경
+    df1.loc[df1['정비구분'] == 'nan', '정비구분'] = np.nan
+
 # 통합 대시보드 표시 함수 (정비일지 + 수리비 통합)
 def display_integrated_dashboard(df, category_name, key_prefix):
     # 지표 카드용 컬럼 생성
@@ -35,7 +41,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
 
     with col1:
         total_cases = len(df)
-        st.metric(f"{category_name} AS 건수", f"{total_cases:,}")
+        st.metric(f"{category_name} AS 건수", f"{total_cases:,}", key=f"{key_prefix}_metric_cases")
 
     with col2:
         # 가동시간 컬럼이 있는지 확인
@@ -47,9 +53,9 @@ def display_integrated_dashboard(df, category_name, key_prefix):
 
         if operation_col and df[operation_col].notna().any():
             avg_operation = df[operation_col].mean()
-            st.metric("평균 가동시간", f"{avg_operation:.2f}시간")
+            st.metric("평균 가동시간", f"{avg_operation:.2f}시간", key=f"{key_prefix}_metric_operation")
         else:
-            st.metric("평균 가동시간", "데이터 없음")
+            st.metric("평균 가동시간", "데이터 없음", key=f"{key_prefix}_metric_operation")
 
     with col3:
         # 수리시간 컬럼이 있는지 확인
@@ -61,22 +67,21 @@ def display_integrated_dashboard(df, category_name, key_prefix):
 
         if repair_col and df[repair_col].notna().any():
             avg_repair = df[repair_col].mean()
-            st.metric("평균 수리시간", f"{avg_repair:.2f}시간")
+            st.metric("평균 수리시간", f"{avg_repair:.2f}시간", key=f"{key_prefix}_metric_repair")
         else:
-            st.metric("평균 수리시간", "데이터 없음")
+            st.metric("평균 수리시간", "데이터 없음", key=f"{key_prefix}_metric_repair")
 
     with col4:
         # 수리비 평균 표시
         if '수리비' in df.columns and df['수리비'].notna().any():
             avg_cost = df['수리비'].mean()
-            st.metric("평균 수리비용", f"{avg_cost:,.0f}원")
+            st.metric("평균 수리비용", f"{avg_cost:,.0f}원", key=f"{key_prefix}_metric_cost")
         else:
-            st.metric("평균 수리비용", "데이터 없음")
+            st.metric("평균 수리비용", "데이터 없음", key=f"{key_prefix}_metric_cost")
 
     st.markdown("---")
     
     # 분석 섹션 선택기 (확장 가능한 섹션으로 분리)
-    # key_prefix를 추가하여 각 탭에서 고유한 ID를 가지도록 함
     sections = st.multiselect(
         "표시할 분석 섹션 선택",
         ["월별 분석", "지역별 분석", "소속별 분석", "수리비 상세 분석"],
@@ -86,7 +91,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
     
     # 1. 월별 분석
     if "월별 분석" in sections:
-        with st.expander("월별 분석", expanded=True):
+        with st.expander("월별 분석", expanded=True, key=f"{key_prefix}_expander_monthly"):
             if '정비일자' in df.columns:
                 col1, col2, col3 = st.columns(3)
                 
@@ -112,7 +117,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     ax.set_ylabel('건수')
                     plt.tight_layout()
                     
-                    st.pyplot(fig, use_container_width=True)
+                    st.pyplot(fig, use_container_width=True, key=f"{key_prefix}_fig_monthly_count")
                     st.markdown(get_image_download_link(fig, f'{category_name}_월별_AS_건수.png', '월별 AS 건수 다운로드'), unsafe_allow_html=True)
                 
                 with col2:
@@ -127,8 +132,10 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         st.subheader("월별 평균 가동시간")
                         
                         # 데이터 준비
-                        df['월'] = df['정비일자'].dt.to_period('M')
-                        monthly_avg = df.groupby('월')[operation_col].mean().reset_index()
+                        df_op = df.copy()
+                        df_op['월'] = df_op['정비일자'].dt.to_period('M')
+                        monthly_avg = df_op.groupby('월')[operation_col].mean().reset_index()
+                        monthly_avg['월'] = monthly_avg['월'].astype(str)
                         
                         # 그래프 생성
                         fig, ax = create_figure(figsize=(10, 6), dpi=150)
@@ -141,7 +148,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         plt.xticks(rotation=45)
                         plt.tight_layout()
                         
-                        st.pyplot(fig, use_container_width=True)
+                        st.pyplot(fig, use_container_width=True, key=f"{key_prefix}_fig_monthly_operation")
                         st.markdown(get_image_download_link(fig, f'{category_name}_월별_평균_가동시간.png', '월별 평균 가동시간 다운로드'), unsafe_allow_html=True)
                     
                     elif chart_option == "월별 평균 수리비" and '수리비' in df.columns:
@@ -165,7 +172,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         ax.set_ylabel('평균 수리비 (원)')
                         plt.tight_layout()
                         
-                        st.pyplot(fig, use_container_width=True)
+                        st.pyplot(fig, use_container_width=True, key=f"{key_prefix}_fig_monthly_cost")
                         st.markdown(get_image_download_link(fig, f'{category_name}_월별_평균_수리비.png', '월별 평균 수리비 다운로드'), unsafe_allow_html=True)
                 
                 with col3:
@@ -190,14 +197,14 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         
                         plt.xticks(rotation=45)
                         plt.tight_layout()
-                        st.pyplot(fig, use_container_width=True)
+                        st.pyplot(fig, use_container_width=True, key=f"{key_prefix}_fig_repair_time")
                         st.markdown(get_image_download_link(fig, f'{category_name}_수리시간_분포.png', '수리시간 분포 다운로드'), unsafe_allow_html=True)
             else:
                 st.warning("정비일자 컬럼이 없어 월별 분석을 수행할 수 없습니다.")
     
     # 2. 지역별 분석
     if "지역별 분석" in sections:
-        with st.expander("지역별 분석", expanded=True):
+        with st.expander("지역별 분석", expanded=True, key=f"{key_prefix}_expander_region"):
             # 지역별 빈도 분석
             st.subheader("지역별 AS 건수")
             if '지역' in df.columns:
@@ -229,7 +236,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     
                     plt.tight_layout()
                     plt.xticks(rotation=45)
-                    st.pyplot(fig, use_container_width=True)
+                    st.pyplot(fig, use_container_width=True, key=f"{key_prefix}_fig_region")
                     
                     # 다운로드 링크 추가
                     st.markdown(get_image_download_link(fig, f'{category_name}_지역별_AS_현황.png', '지역별 AS 현황 다운로드'), unsafe_allow_html=True)
@@ -238,7 +245,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
     
     # 3. 소속별 분석
     if "소속별 분석" in sections:
-        with st.expander("소속별 분석", expanded=True):
+        with st.expander("소속별 분석", expanded=True, key=f"{key_prefix}_expander_dept"):
             # 정비자 소속별 분석
             if '정비자소속' in df.columns and 'df4' in st.session_state:
                 col1, col2 = st.columns(2)
@@ -277,7 +284,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     ax.set_xlabel('인원당 정비 건수')
                     plt.tight_layout()
                     
-                    st.pyplot(fig, use_container_width=True)
+                    st.pyplot(fig, use_container_width=True, key=f"{key_prefix}_fig_dept_count")
                     st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당정비건수.png', '소속별 인원당정비건수 다운로드'), unsafe_allow_html=True)
                 
                 with col2:
@@ -315,7 +322,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         ax.set_xlabel('인원당 수리비 (원)')
                         plt.tight_layout()
                         
-                        st.pyplot(fig, use_container_width=True)
+                        st.pyplot(fig, use_container_width=True, key=f"{key_prefix}_fig_dept_cost")
                         st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당수리비.png', '소속별 인원당수리비 다운로드'), unsafe_allow_html=True)
                     
                     # 수리비 데이터가 없는 경우 수리시간 기준 그래프 표시
@@ -352,14 +359,14 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         ax.set_xlabel('인원당 수리시간 (시간)')
                         plt.tight_layout()
                         
-                        st.pyplot(fig, use_container_width=True)
+                        st.pyplot(fig, use_container_width=True, key=f"{key_prefix}_fig_dept_time")
                         st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당수리시간.png', '소속별 인원당수리시간 다운로드'), unsafe_allow_html=True)
             else:
                 st.warning("정비자 소속 정보가 없습니다.")
     
     # 4. 수리비 상세 분석
     if "수리비 상세 분석" in sections and '수리비' in df.columns:
-        with st.expander("수리비 상세 분석", expanded=True):
+        with st.expander("수리비 상세 분석", expanded=True, key=f"{key_prefix}_expander_cost"):
             st.header("수리비 상세 분석")
             
             col1, col2 = st.columns(2)
@@ -382,7 +389,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     ax.set_xlabel('총 수리비 (원)')
                     plt.tight_layout()
                     
-                    st.pyplot(fig, use_container_width=True)
+                    st.pyplot(fig, use_container_width=True, key=f"{key_prefix}_fig_site_cost")
                     st.markdown(get_image_download_link(fig, f'{category_name}_현장별_수리비_Top15.png', '현장별 수리비 Top15 다운로드'), unsafe_allow_html=True)
                 else:
                     st.warning("현장 정보가 없습니다.")
@@ -408,7 +415,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     ax.set_xlabel('총 수리비 (원)')
                     plt.tight_layout()
                     
-                    st.pyplot(fig, use_container_width=True)
+                    st.pyplot(fig, use_container_width=True, key=f"{key_prefix}_fig_worker_cost")
                     st.markdown(get_image_download_link(fig, f'{category_name}_정비자별_수리비_Top15.png', '정비자별 수리비 Top15 다운로드'), unsafe_allow_html=True)
                 else:
                     st.warning("정비자 정보가 없습니다.")
@@ -444,20 +451,27 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     ax.set_xlabel('사용 빈도')
                     plt.tight_layout()
                     
-                    st.pyplot(fig, use_container_width=True)
+                    st.pyplot(fig, use_container_width=True, key=f"{key_prefix}_fig_parts")
                     st.markdown(get_image_download_link(fig, f'{category_name}_자주사용부품_Top15.png', '자주 사용되는 부품 Top15 다운로드'), unsafe_allow_html=True)
                 else:
                     st.warning("부품 사용 데이터가 없습니다.")
 
-# 정비구분 컬럼 확인 및 값 검증
+# 정비구분 컬럼 확인 및 값 검증 - 여기서부터 수정
 if '정비구분' in df1.columns and df1['정비구분'].notna().any():
     # 실제 존재하는 정비구분 값 확인
     maintenance_types = df1['정비구분'].dropna().unique()
-
-    # 내부, 외부 값이 있는지 확인
-    has_internal = '내부' in maintenance_types
-    has_external = '외부' in maintenance_types
-
+    
+    # 내부, 외부 값이 있는지 확인 (대소문자 구분 없이)
+    has_internal = any('내부' in str(val).lower() for val in maintenance_types)
+    has_external = any('외부' in str(val).lower() for val in maintenance_types)
+    
+    # 정확한 '내부'/'외부' 값 찾기
+    internal_value = next((val for val in maintenance_types if '내부' in str(val).lower()), None)
+    external_value = next((val for val in maintenance_types if '외부' in str(val).lower()), None)
+    
+    # 디버깅 정보 출력 (필요시)
+    st.write(f"정비구분 고유값: {maintenance_types}")
+    
     # 탭 생성
     tabs = st.tabs(["전체", "내부", "외부"])
 
@@ -469,8 +483,8 @@ if '정비구분' in df1.columns and df1['정비구분'].notna().any():
     # 내부 탭
     with tabs[1]:
         st.header("내부 정비 현황")
-        if has_internal:
-            df_internal = df1[df1['정비구분'] == '내부']
+        if has_internal and internal_value is not None:
+            df_internal = df1[df1['정비구분'] == internal_value]
             display_integrated_dashboard(df_internal, "내부", "internal")
         else:
             st.info("내부 정비 데이터가 없습니다.")
@@ -478,8 +492,8 @@ if '정비구분' in df1.columns and df1['정비구분'].notna().any():
     # 외부 탭
     with tabs[2]:
         st.header("외부 정비 현황")
-        if has_external:
-            df_external = df1[df1['정비구분'] == '외부']
+        if has_external and external_value is not None:
+            df_external = df1[df1['정비구분'] == external_value]
             display_integrated_dashboard(df_external, "외부", "external")
         else:
             st.info("외부 정비 데이터가 없습니다.")

@@ -28,6 +28,36 @@ if 'df1_with_costs' not in st.session_state:
 # 데이터 불러오기
 df1 = st.session_state.df1_with_costs
 
+# 조직도 데이터 확인 및 로드
+import os  # 파일 경로 확인을 위해 필요
+
+if 'df4' not in st.session_state or st.session_state.df4 is None:
+    try:
+        # 조직도 데이터 직접 로드
+        org_data_path = "data/조직도데이터.xlsx"
+        if os.path.exists(org_data_path):
+            st.session_state.df4 = pd.read_excel(org_data_path)
+            st.session_state.df4.columns = [str(col).strip().replace('\n', '') for col in st.session_state.df4.columns]
+            st.success("조직도 데이터를 성공적으로 로드했습니다.")
+        else:
+            st.warning("조직도 데이터 파일이 없습니다.")
+            # 빈 데이터프레임 생성
+            st.session_state.df4 = pd.DataFrame(columns=['소속'])
+    except Exception as e:
+        st.error(f"조직도 데이터 로드 중 오류 발생: {e}")
+        # 빈 데이터프레임 생성
+        st.session_state.df4 = pd.DataFrame(columns=['소속'])
+
+# 조직도 데이터 확인 (디버깅용)
+if 'df4' in st.session_state and st.session_state.df4 is not None:
+    st.write(f"조직도 데이터 크기: {st.session_state.df4.shape}")
+    if '소속' in st.session_state.df4.columns:
+        st.write(f"소속 종류: {st.session_state.df4['소속'].nunique()}개")
+    else:
+        st.warning("조직도 데이터에 '소속' 컬럼이 없습니다.")
+else:
+    st.error("조직도 데이터가 세션 상태에 없거나 None입니다.")
+
 # 정비구분 컬럼 전처리 (줄바꿈 제거 및 공백 정리) - 여기에 추가
 if '정비구분' in df1.columns:
     df1['정비구분'] = df1['정비구분'].astype(str).apply(lambda x: x.strip().replace('\n', '') if not pd.isna(x) else x)
@@ -247,11 +277,15 @@ def display_integrated_dashboard(df, category_name, key_prefix):
     if "소속별 분석" in sections:
         with st.expander("소속별 분석", expanded=True):
             # 정비자 소속별 분석
-            if '정비자소속' in df.columns and 'df4' in st.session_state:
+            if '정비자소속' in df.columns and 'df4' in st.session_state and st.session_state.df4 is not None and '소속' in st.session_state.df4.columns:
                 col1, col2 = st.columns(2)
                 
                 df4 = st.session_state.df4  # 조직도 데이터
                 total_staff_by_dept = df4['소속'].value_counts()
+                
+                # 디버깅 정보 추가
+                st.write(f"조직도 데이터 소속 종류: {total_staff_by_dept.shape[0]}개")
+                st.write(f"정비자소속 종류: {df['정비자소속'].nunique()}개")
                 
                 with col1:
                     st.subheader("정비자 소속별 건수")
@@ -362,7 +396,16 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         st.pyplot(fig, use_container_width=True)
                         st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당수리시간.png', '소속별 인원당수리시간 다운로드'), unsafe_allow_html=True)
             else:
-                st.warning("정비자 소속 정보가 없습니다.")
+                if '정비자소속' not in df.columns:
+                    st.warning("정비자소속 컬럼이 없습니다.")
+                elif 'df4' not in st.session_state:
+                    st.warning("조직도 데이터가 세션 상태에 없습니다.")
+                elif st.session_state.df4 is None:
+                    st.warning("조직도 데이터가 None입니다.")
+                elif '소속' not in st.session_state.df4.columns:
+                    st.warning("조직도 데이터에 '소속' 컬럼이 없습니다.")
+                else:
+                    st.warning("정비자 소속 정보가 없습니다.")
     
     # 4. 수리비 상세 분석
     if "수리비 상세 분석" in sections and '수리비' in df.columns:

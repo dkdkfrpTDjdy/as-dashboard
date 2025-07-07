@@ -306,7 +306,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     
                     if not top_depts_by_count.empty:
                         # 그래프 생성
-                        fig, ax = create_figure(figsize=(8, 8), dpi=150)
+                        fig, ax = create_figure(figsize=(10, 8), dpi=150)
                         sns.barplot(x='건수', y='정비자소속', data=top_depts_by_count, ax=ax, palette="Blues_r")
                         
                         # 막대 위에 텍스트 표시

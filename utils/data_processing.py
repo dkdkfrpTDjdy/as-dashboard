@@ -11,15 +11,35 @@ import datetime
 def load_data(file):
     """파일에서 데이터를 로드하는 함수"""
     try:
-        df = pd.read_excel(file)
+        # 모든 문자열 컬럼을 문자열로 로드하도록 설정
+        df = pd.read_excel(file, dtype=str)
 
         # 컬럼명 정리 (줄바꿈 제거 및 공백 제거)
         df.columns = [str(col).strip().replace('\n', '') for col in df.columns]
 
-        # 문자열 데이터의 줄바꿈 제거 및 공백 정리
+        # 관리번호가 있으면 문자열로 강제 변환
+        if '관리번호' in df.columns:
+            df['관리번호'] = df['관리번호'].astype(str)
+
+        # 숫자형 데이터 변환 (금액, 시간 등)
+        numeric_cols = []
         for col in df.columns:
-            if df[col].dtype == 'object':  # 문자열 컬럼만 처리
-                df[col] = df[col].astype(str).apply(lambda x: x.strip().replace('\n', '') if not pd.isna(x) else x)
+            if any(keyword in col.lower() for keyword in ['금액', '시간', '비용', '단가']):
+                numeric_cols.append(col)
+        
+        # 숫자형 컬럼 변환
+        for col in numeric_cols:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+        # 날짜형 데이터 변환
+        date_cols = []
+        for col in df.columns:
+            if any(keyword in col.lower() for keyword in ['일자', '날짜', 'date']):
+                date_cols.append(col)
+        
+        # 날짜형 컬럼 변환
+        for col in date_cols:
+            df[col] = pd.to_datetime(df[col], errors='coerce')
         
         # 컬럼명 매핑 (정비일지 데이터인 경우)
         try:
@@ -272,7 +292,14 @@ def merge_dataframes(df1, df2):
 
 @st.cache_data
 def merge_repair_costs(maintenance_df, parts_df):
-    """정비일지(df1)와 소모품(df3) 데이터를 조건에 맞게 병합해 수리비 및 사용부품을 반환"""
+    """
+    정비일지(df1)와 소모품(df3) 데이터를 조건에 맞게 병합해 수리비 및 사용부품을 반환
+    
+    매칭 조건:
+    1. 관리번호가 일치
+    2. 정비자번호와 출고자가 일치
+    3. 정비일자와 출고일자가 ±30일 이내
+    """
     if maintenance_df is None or parts_df is None:
         return maintenance_df
 
@@ -282,72 +309,108 @@ def merge_repair_costs(maintenance_df, parts_df):
         df3 = parts_df.copy()
 
         # 필수 컬럼 존재 여부 확인
-        for col in ['관리번호', '정비일자', '정비자번호']:
+        required_cols_maintenance = ['관리번호', '정비일자', '정비자번호']
+        required_cols_repair = ['관리번호', '출고일자', '출고자', '출고금액', '자재명']
+        
+        for col in required_cols_maintenance:
             if col not in df1.columns:
                 st.warning(f"정비일지에 '{col}' 컬럼이 없습니다.")
                 return df1
-        for col in ['관리번호', '출고일자', '출고자', '출고금액', '자재명']:
+                
+        for col in required_cols_repair:
             if col not in df3.columns:
                 st.warning(f"소모품 데이터에 '{col}' 컬럼이 없습니다.")
                 return maintenance_df
 
-        # 결측값 보정 (NaN 처리)
+        # 디버깅: 데이터 형식 확인
+        print("정비일지 관리번호 샘플:", df1['관리번호'].head().tolist())
+        print("수리비 관리번호 샘플:", df3['관리번호'].head().tolist())
+        print("정비자번호 샘플:", df1['정비자번호'].head().tolist())
+        print("출고자 샘플:", df3['출고자'].head().tolist())
+
+        # 관리번호를 문자열로 변환 (숫자 형식 방지)
+        df1['관리번호'] = df1['관리번호'].astype(str)
+        df3['관리번호'] = df3['관리번호'].astype(str)
+        
+        # 정비자번호와 출고자를 문자열로 변환
+        df1['정비자번호'] = df1['정비자번호'].astype(str)
+        df3['출고자'] = df3['출고자'].astype(str)
+        
+        # 결측값 보정
+        df1['정비자번호'] = df1['정비자번호'].fillna("")
         df3['출고자'] = df3['출고자'].fillna("")
         df3['자재명'] = df3['자재명'].fillna("")
         df3['출고금액'] = df3['출고금액'].fillna(0)
 
-        # 데이터 형 변환
+        # 날짜 형식 변환
         df1['정비일자'] = pd.to_datetime(df1['정비일자'], errors='coerce')
         df3['출고일자'] = pd.to_datetime(df3['출고일자'], errors='coerce')
-        df1['관리번호'] = df1['관리번호'].astype(str)
-        df3['관리번호'] = df3['관리번호'].astype(str)
-        df1['정비자번호'] = df1['정비자번호'].astype(str)
-        df3['출고자'] = df3['출고자'].astype(str)
-
-        # 병합 (관리번호 기준)
-        merged = df1[['관리번호', '정비일자', '정비자번호']].merge(
-            df3[['관리번호', '출고일자', '출고자', '출고금액', '자재명']],
-            on='관리번호',
-            how='left'
-        )
-
-        # 날짜 차이 계산 및 조건 필터링
-        merged['일차'] = (merged['출고일자'] - merged['정비일자']).dt.days
-        matched = merged[
-            (merged['일차'].abs() <= 30) &
-            (merged['정비자번호'] == merged['출고자'])
-        ]
-
-        # 수리비 및 사용부품 집계
-        if not matched.empty:
-            agg = matched.groupby(['관리번호', '정비일자']).agg({
-                '출고금액': 'sum',
-                '자재명': lambda x: ', '.join(x.dropna().unique())
-            }).reset_index().rename(columns={
-                '출고금액': '수리비',
-                '자재명': '사용부품'
-            })
-
-            # 원본 정비일지와 병합
-            df1 = df1.merge(agg, on=['관리번호', '정비일자'], how='left')
-        else:
-            # 매칭된 데이터가 없는 경우 빈 컬럼 추가
-            df1['수리비'] = 0
-            df1['사용부품'] = ""
-            return df1
-
-        # 누락값 처리 (컬럼이 존재하는지 확인 후 처리)
+        
+        # 디버깅: 변환 후 데이터 확인
+        print("변환 후 정비일지 관리번호 샘플:", df1['관리번호'].head().tolist())
+        print("변환 후 수리비 관리번호 샘플:", df3['관리번호'].head().tolist())
+        
+        # 기존 수리비 컬럼 제거 (있는 경우)
         if '수리비' in df1.columns:
-            df1['수리비'] = df1['수리비'].fillna(0)
-        else:
-            df1['수리비'] = 0
-            
+            df1 = df1.drop('수리비', axis=1)
+        
+        # 기존 사용부품 컬럼 제거 (있는 경우)
         if '사용부품' in df1.columns:
-            df1['사용부품'] = df1['사용부품'].fillna("")
-        else:
-            df1['사용부품'] = ""
+            df1 = df1.drop('사용부품', axis=1)
 
-        return df1
+        # 결과 데이터프레임 초기화
+        result_df = df1.copy()
+        result_df['수리비'] = 0
+        result_df['사용부품'] = ""
+
+        # 매칭 카운터 초기화
+        match_count = 0
+        total_count = len(result_df)
+        
+        # 각 정비 건에 대해 매칭되는 수리비 찾기
+        for idx, row in result_df.iterrows():
+            # 필수 값 확인
+            if pd.isna(row['정비일자']) or pd.isna(row['관리번호']) or pd.isna(row['정비자번호']):
+                continue
+                
+            # 관리번호 매칭
+            matching_parts = df3[df3['관리번호'] == row['관리번호']]
+            
+            if len(matching_parts) == 0:
+                continue
+                
+            # 정비자번호와 출고자 매칭
+            matching_parts = matching_parts[matching_parts['출고자'] == row['정비자번호']]
+            
+            if len(matching_parts) == 0:
+                continue
+                
+            # 날짜 범위 매칭 (±30일)
+            date_min = row['정비일자'] - pd.Timedelta(days=30)
+            date_max = row['정비일자'] + pd.Timedelta(days=30)
+            
+            matching_parts = matching_parts[
+                (matching_parts['출고일자'] >= date_min) & 
+                (matching_parts['출고일자'] <= date_max)
+            ]
+            
+            # 매칭된 수리비 합계 및 사용부품 목록 계산
+            if len(matching_parts) > 0:
+                match_count += 1
+                total_cost = matching_parts['출고금액'].sum()
+                parts_list = ', '.join(matching_parts['자재명'].dropna().unique())
+                
+                result_df.at[idx, '수리비'] = total_cost
+                result_df.at[idx, '사용부품'] = parts_list
+
+        # 매칭 결과 출력
+        print(f"총 {total_count}개 중 {match_count}개 매칭됨 ({match_count/total_count*100:.1f}%)")
+        
+        # 매칭된 관리번호 목록 출력 (디버깅용)
+        matched_ids = result_df.loc[result_df['수리비'] > 0, '관리번호'].unique()
+        print(f"매칭된 관리번호 샘플 (최대 10개): {matched_ids[:10].tolist()}")
+
+        return result_df
 
     except Exception as e:
         st.error(f"병합 중 오류 발생: {e}")

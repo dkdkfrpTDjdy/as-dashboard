@@ -166,7 +166,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         region_counts = region_counts.sort_values(ascending=False).nlargest(15)
                         
                         # 시각화
-                        fig, ax = create_figure(figsize=(10, 8), dpi=150)
+                        fig, ax = create_figure(figsize=(10, 6), dpi=150)
                         blue_palette = sns.color_palette("Blues", n_colors=len(region_counts))
                         
                         sns.barplot(x=region_counts.index, y=region_counts.values, ax=ax, palette=blue_palette)
@@ -176,7 +176,6 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                             ax.text(i, v + max(region_counts.values) * 0.02, str(v), ha='center', fontsize=10)
                         
                         plt.tight_layout()
-                        plt.xticks(rotation=45)
                         st.pyplot(fig, use_container_width=True)
                         
                         # 다운로드 링크 추가
@@ -286,7 +285,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                 else:
                     st.warning("수리시간 데이터가 없습니다.")
     
-    # 소속별 분석 부분만 수정
+    # 소속별 분석 부분 수정
     if "소속별 분석" in sections:
         with st.expander("소속별 분석", expanded=True):
             # 미리 계산된 소속별 통계 사용
@@ -299,8 +298,9 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     # 미리 계산된 통계 사용
                     dept_stats = st.session_state.dept_repair_stats
                     
-                    # 상위 10개 소속 선택
-                    top_depts_by_count = dept_stats.sort_values('건수', ascending=False).head(10)
+                    # 3건 초과인 소속만 필터링하고 상위 10개 소속 선택
+                    filtered_depts = dept_stats[dept_stats['건수'] > 3]
+                    top_depts_by_count = filtered_depts.sort_values('건수', ascending=False).head(10)
                     
                     if not top_depts_by_count.empty:
                         # 그래프 생성
@@ -317,18 +317,21 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         st.pyplot(fig, use_container_width=True)
                         st.markdown(get_image_download_link(fig, f'{category_name}_소속별_정비건수.png', '소속별 정비건수 다운로드'), unsafe_allow_html=True)
                     else:
-                        st.warning("소속별 정비 건수 데이터가 없습니다.")
+                        st.warning("3건 초과인 소속별 정비 건수 데이터가 없습니다.")
                 
                 with col2:
-                    st.subheader("정비자 소속별 건수와 수리비 비율")
+                    st.subheader("파트별 건수 대비 수리비")
                     
                     if not dept_stats.empty and '총수리비' in dept_stats.columns and '건수' in dept_stats.columns:
+                        # 3건 초과인 소속만 필터링
+                        filtered_depts = dept_stats[dept_stats['건수'] > 3]
+                        
                         # 상위 10개 소속 선택 (건수 기준)
-                        top_depts = dept_stats.sort_values('건수', ascending=False).head(10)
+                        top_depts = filtered_depts.sort_values('건수', ascending=False).head(10)
                         
                         # 전체 대비 비율 계산
-                        total_repairs = top_depts['건수'].sum()
-                        total_costs = top_depts['총수리비'].sum()
+                        total_repairs = dept_stats['건수'].sum()  # 전체 건수 사용
+                        total_costs = dept_stats['총수리비'].sum()  # 전체 수리비 사용
                         
                         top_depts['건수비율'] = top_depts['건수'] / total_repairs * 100
                         top_depts['수리비비율'] = top_depts['총수리비'] / total_costs * 100
@@ -348,7 +351,6 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         
                         # 축 설정
                         ax.set_ylabel('비율(%)')
-                        ax.set_title('소속별 건수 비율 vs 수리비 비율')
                         ax.set_xticks(x)
                         ax.set_xticklabels(top_depts['정비자소속'], rotation=45, ha='right')
                         ax.legend()
@@ -365,7 +367,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         plt.tight_layout()
                         
                         st.pyplot(fig, use_container_width=True)
-                        st.markdown(get_image_download_link(fig, f'{category_name}_소속별_건수수리비_비율.png', '소속별 건수/수리비 비율 다운로드'), unsafe_allow_html=True)
+                        st.markdown(get_image_download_link(fig, f'{category_name}_파트별_건수수리비_비율.png', '파트별 건수/수리비 다운로드'), unsafe_allow_html=True)
                     else:
                         st.warning("소속별 정비 건수 또는 수리비 데이터가 없습니다.")
             else:
@@ -408,7 +410,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     st.warning("현장 정보가 없습니다.")
             
             with col2:
-                st.subheader("정비자별 건수와 수리비 비율")
+                st.subheader("정비자별 건수 대비 수리비")
                 
                 # 정비자별 수리비 분석
                 if '정비자' in df.columns:
@@ -435,15 +437,15 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         # 상위 10명 선택 (건수 기준)
                         top_workers = worker_stats.sort_values('건수', ascending=False).head(10)
                         
-                        # 전체 대비 비율 계산
-                        total_repairs = top_workers['건수'].sum()
-                        total_costs = top_workers['총수리비'].sum()
+                        # 전체 대비 비율 계산 (전체 데이터 기준)
+                        total_repairs = valid_data.shape[0]  # 전체 정비 건수
+                        total_costs = valid_data['수리비'].sum()  # 전체 수리비
                         
                         top_workers['건수비율'] = top_workers['건수'] / total_repairs * 100
                         top_workers['수리비비율'] = top_workers['총수리비'] / total_costs * 100
                         
                         # 그래프 생성
-                        fig, ax = create_figure(figsize=(12, 8), dpi=150)
+                        fig, ax = create_figure(figsize=(10, 8), dpi=150)
                         
                         # 건수 비율과 수리비 비율을 나란히 표시
                         x = np.arange(len(top_workers))
@@ -501,7 +503,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     parts_df = pd.DataFrame(top_parts, columns=['부품명', '사용빈도'])
                     
                     # 그래프 생성
-                    fig, ax = create_figure(figsize=(12, 8), dpi=150)
+                    fig, ax = create_figure(figsize=(10, 8), dpi=150)
                     sns.barplot(x='사용빈도', y='부품명', data=parts_df, ax=ax, palette="Blues_r")
                     
                     # 값 표시

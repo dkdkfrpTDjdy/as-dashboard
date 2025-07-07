@@ -107,7 +107,6 @@ def display_integrated_dashboard(df, category_name, key_prefix):
     # 1. 기본 분석 (월별 + 지역별)
     if "기본 분석" in sections:
         with st.expander("기본 분석", expanded=True):
-            st.subheader("월별 및 지역별 분석")
             
             # 첫 번째 줄: 월별 AS 건수와 지역별 AS 건수
             col1, col2 = st.columns(2)
@@ -140,7 +139,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     for i, v in enumerate(monthly_counts['건수']):
                         ax.text(i, v + max(monthly_counts['건수']) * 0.01, str(v), ha='center')
                         
-                    plt.xticks(rotation=45)
+                    plt.xticks()
                     ax.set_ylabel('건수')
                     plt.tight_layout()
                     
@@ -282,175 +281,179 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     
                     # 막대 위에 텍스트 표시
                     for i, v in enumerate(repair_time_counts.values):
-                        ax.text(i, v + max(repair_time_counts.values) * 0.02, str(v), ha='center', fontsize=10)
+                        ax.text(i, v + max(repair_time_counts.values) * 0.01, str(v), ha='center', fontsize=10)
                     
-                    plt.xticks(rotation=45)
+                    plt.xticks()
                     plt.tight_layout()
                     st.pyplot(fig, use_container_width=True)
                     st.markdown(get_image_download_link(fig, f'{category_name}_수리시간_분포.png', '수리시간 분포 다운로드'), unsafe_allow_html=True)
                 else:
                     st.warning("수리시간 데이터가 없습니다.")
     
-    # 3. 소속별 분석
-    if "소속별 분석" in sections:
-        with st.expander("소속별 분석", expanded=True):
-            # 미리 계산된 소속별 통계 사용
-            if 'dept_repair_stats' in st.session_state and st.session_state.dept_repair_stats is not None:
+    # 3. 상세 분석 (소속별 분석 + 수리비 상세 분석 통합)
+    if any(section in sections for section in ["소속별 분석", "수리비 상세 분석"]):
+        with st.expander("상세 분석", expanded=True):
+            st.header("상세 분석")
+            
+            # 소속별 분석 부분
+            if "소속별 분석" in sections:
+                st.subheader("소속별 분석")
+                # 미리 계산된 소속별 통계 사용
+                if 'dept_repair_stats' in st.session_state and st.session_state.dept_repair_stats is not None:
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown("##### 정비자 소속별 건수")
+                        
+                        # 미리 계산된 통계 사용
+                        dept_stats = st.session_state.dept_repair_stats
+                        
+                        # 상위 10개 소속 선택
+                        top_depts_by_count = dept_stats.sort_values('건수', ascending=False).head(10)
+                        
+                        if not top_depts_by_count.empty:
+                            # 그래프 생성
+                            fig, ax = create_figure(figsize=(10, 8), dpi=150)
+                            sns.barplot(x='건수', y='정비자소속', data=top_depts_by_count, ax=ax, palette="Blues_r")
+                            
+                            # 막대 위에 텍스트 표시
+                            for i, row in enumerate(top_depts_by_count.itertuples()):
+                                ax.text(row.건수 + 0.5, i, f"{row.건수}건", va='center', fontsize=8)
+                            
+                            ax.set_xlabel('정비 건수')
+                            plt.tight_layout()
+                            
+                            st.pyplot(fig, use_container_width=True)
+                            st.markdown(get_image_download_link(fig, f'{category_name}_소속별_정비건수.png', '소속별 정비건수 다운로드'), unsafe_allow_html=True)
+                        else:
+                            st.warning("소속별 정비 건수 데이터가 없습니다.")
+                    
+                    with col2:
+                        st.markdown("##### 정비자 소속별 수리비")
+                        
+                        # 상위 10개 소속 선택 (인원당 수리비 기준)
+                        top_depts_by_cost = dept_stats.sort_values('인원당수리비', ascending=False).head(10)
+                        
+                        if not top_depts_by_cost.empty:
+                            # 그래프 생성
+                            fig, ax = create_figure(figsize=(10, 8), dpi=150)
+                            sns.barplot(x='인원당수리비', y='정비자소속', data=top_depts_by_cost, ax=ax, palette="Blues_r")
+                            
+                            # 막대 위에 텍스트 표시
+                            for i, row in enumerate(top_depts_by_cost.itertuples()):
+                                ax.text(row.인원당수리비 + 100, i, f"{row.인원당수리비:,.0f}원/인", va='center', fontsize=8)
+                            
+                            ax.set_xlabel('인원당 수리비 (원)')
+                            plt.tight_layout()
+                            
+                            st.pyplot(fig, use_container_width=True)
+                            st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당수리비.png', '소속별 인원당수리비 다운로드'), unsafe_allow_html=True)
+                        else:
+                            st.warning("소속별 수리비 데이터가 없습니다.")
+                else:
+                    st.info("소속별 분석 데이터가 준비되지 않았습니다. 홈 화면에서 데이터를 다시 로드해 주세요.")
+            
+            # 수리비 상세 분석 부분
+            if "수리비 상세 분석" in sections and '수리비' in df.columns:
+                st.subheader("수리비 상세 분석")
+                
                 col1, col2 = st.columns(2)
                 
                 with col1:
-                    st.subheader("정비자 소속별 건수")
+                    st.markdown("##### 수리비 많은 현장 Top 15")
                     
-                    # 미리 계산된 통계 사용
-                    dept_stats = st.session_state.dept_repair_stats
-                    
-                    # 상위 10개 소속 선택
-                    top_depts_by_count = dept_stats.sort_values('건수', ascending=False).head(10)
-                    
-                    if not top_depts_by_count.empty:
-                        # 그래프 생성
-                        fig, ax = create_figure(figsize=(10, 8), dpi=150)
-                        sns.barplot(x='건수', y='정비자소속', data=top_depts_by_count, ax=ax, palette="Blues_r")
+                    # 현장별 수리비 합계
+                    if '현장명' in df.columns:
+                        # 유효한 데이터만 필터링
+                        valid_data = df.dropna(subset=['현장명', '수리비'])
                         
-                        # 막대 위에 텍스트 표시
-                        for i, row in enumerate(top_depts_by_count.itertuples()):
-                            ax.text(row.건수 + 0.5, i, f"{row.건수}건", va='center', fontsize=8)
-                        
-                        ax.set_xlabel('정비 건수')
-                        plt.tight_layout()
-                        
-                        st.pyplot(fig, use_container_width=True)
-                        st.markdown(get_image_download_link(fig, f'{category_name}_소속별_정비건수.png', '소속별 정비건수 다운로드'), unsafe_allow_html=True)
+                        if not valid_data.empty:
+                            site_costs = valid_data.groupby('현장명')['수리비'].sum().sort_values(ascending=False).head(15)
+                            
+                            # 그래프 생성
+                            fig, ax = create_figure(figsize=(10, 8), dpi=150)
+                            sns.barplot(x=site_costs.values, y=site_costs.index, ax=ax, palette="Blues_r")
+                            
+                            # 값 표시
+                            for i, v in enumerate(site_costs.values):
+                                ax.text(v + v*0.005, i, f"{v:,.0f}원", va='center', fontsize=6)
+                            
+                            ax.set_xlabel('총 수리비 (원)')
+                            plt.tight_layout()
+                            
+                            st.pyplot(fig, use_container_width=True)
+                            st.markdown(get_image_download_link(fig, f'{category_name}_현장별_수리비_Top15.png', '현장별 수리비 Top15 다운로드'), unsafe_allow_html=True)
+                        else:
+                            st.warning("유효한 현장 및 수리비 데이터가 없습니다.")
                     else:
-                        st.warning("소속별 정비 건수 데이터가 없습니다.")
+                        st.warning("현장 정보가 없습니다.")
                 
                 with col2:
-                    st.subheader("정비자 소속별 수리비")
+                    st.markdown("##### 정비자별 수리비 Top 15")
                     
-                    # 상위 10개 소속 선택 (인원당 수리비 기준)
-                    top_depts_by_cost = dept_stats.sort_values('인원당수리비', ascending=False).head(10)
-                    
-                    if not top_depts_by_cost.empty:
-                        # 그래프 생성
-                        fig, ax = create_figure(figsize=(10, 8), dpi=150)
-                        sns.barplot(x='인원당수리비', y='정비자소속', data=top_depts_by_cost, ax=ax, palette="Blues_r")
+                    # 정비자별 수리비 합계
+                    if '정비자번호' in df.columns and '정비자' in df.columns:
+                        # 유효한 데이터만 필터링
+                        valid_data = df.dropna(subset=['소속', '정비자', '수리비'])
                         
-                        # 막대 위에 텍스트 표시
-                        for i, row in enumerate(top_depts_by_cost.itertuples()):
-                            ax.text(row.인원당수리비 + 100, i, f"{row.인원당수리비:,.0f}원/인", va='center', fontsize=8)
-                        
-                        ax.set_xlabel('인원당 수리비 (원)')
-                        plt.tight_layout()
-                        
-                        st.pyplot(fig, use_container_width=True)
-                        st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당수리비.png', '소속별 인원당수리비 다운로드'), unsafe_allow_html=True)
+                        if not valid_data.empty:
+                            # 정비자번호와 이름 조합
+                            valid_data['정비자정보'] = valid_data['정비자'].astype(str) + " (" + valid_data['소속'].astype(str) + ")"
+                            worker_costs = valid_data.groupby('정비자정보')['수리비'].sum().sort_values(ascending=False).head(15)
+                            
+                            # 그래프 생성
+                            fig, ax = create_figure(figsize=(10, 8), dpi=150)
+                            sns.barplot(x=worker_costs.values, y=worker_costs.index, ax=ax, palette="Blues_r")
+                            
+                            # 값 표시
+                            for i, v in enumerate(worker_costs.values):
+                                ax.text(v + v*0.005, i, f"{v:,.0f}원", va='center', fontsize=6)
+                            
+                            ax.set_xlabel('총 수리비 (원)')
+                            plt.tight_layout()
+                            
+                            st.pyplot(fig, use_container_width=True)
+                            st.markdown(get_image_download_link(fig, f'{category_name}_정비자별_수리비_Top15.png', '정비자별 수리비 Top15 다운로드'), unsafe_allow_html=True)
+                        else:
+                            st.warning("유효한 정비자 및 수리비 데이터가 없습니다.")
                     else:
-                        st.warning("소속별 수리비 데이터가 없습니다.")
-            else:
-                st.info("소속별 분석 데이터가 준비되지 않았습니다. 홈 화면에서 데이터를 다시 로드해 주세요.")
-    
-    # 4. 수리비 상세 분석
-    if "수리비 상세 분석" in sections and '수리비' in df.columns:
-        with st.expander("수리비 상세 분석", expanded=True):
-            st.header("수리비 상세 분석")
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader("수리비 많은 현장 Top 15")
+                        st.warning("정비자 정보가 없습니다.")
                 
-                # 현장별 수리비 합계
-                if '현장명' in df.columns:
-                    # 유효한 데이터만 필터링
-                    valid_data = df.dropna(subset=['현장명', '수리비'])
+                # 자주 사용되는 부품 분석
+                if '사용부품' in df.columns:
+                    st.markdown("##### 자주 사용되는 부품 분석")
                     
-                    if not valid_data.empty:
-                        site_costs = valid_data.groupby('현장명')['수리비'].sum().sort_values(ascending=False).head(15)
+                    # 부품 데이터 추출 및 처리
+                    parts_data = []
+                    for parts_str in df['사용부품'].dropna():
+                        if isinstance(parts_str, str) and parts_str.strip():
+                            # 쉼표로 구분된 부품 목록 처리
+                            parts = [p.strip() for p in parts_str.split(',')]
+                            parts_data.extend(parts)
+                    
+                    # 부품별 빈도 계산
+                    parts_counter = Counter(parts_data)
+                    top_parts = parts_counter.most_common(15)
+                    
+                    if top_parts:
+                        # 데이터프레임 생성
+                        parts_df = pd.DataFrame(top_parts, columns=['부품명', '사용빈도'])
                         
                         # 그래프 생성
-                        fig, ax = create_figure(figsize=(10, 8), dpi=150)
-                        sns.barplot(x=site_costs.values, y=site_costs.index, ax=ax, palette="Blues_r")
+                        fig, ax = create_figure(figsize=(12, 8), dpi=150)
+                        sns.barplot(x='사용빈도', y='부품명', data=parts_df, ax=ax, palette="Blues_r")
                         
                         # 값 표시
-                        for i, v in enumerate(site_costs.values):
-                            ax.text(v + v*0.01, i, f"{v:,.0f}원", va='center', fontsize=8)
+                        for i, v in enumerate(parts_df['사용빈도']):
+                            ax.text(v + 0.1, i, str(v), va='center')
                         
-                        ax.set_xlabel('총 수리비 (원)')
+                        ax.set_xlabel('사용 빈도')
                         plt.tight_layout()
                         
                         st.pyplot(fig, use_container_width=True)
-                        st.markdown(get_image_download_link(fig, f'{category_name}_현장별_수리비_Top15.png', '현장별 수리비 Top15 다운로드'), unsafe_allow_html=True)
+                        st.markdown(get_image_download_link(fig, f'{category_name}_자주사용부품_Top15.png', '자주 사용되는 부품 Top15 다운로드'), unsafe_allow_html=True)
                     else:
-                        st.warning("유효한 현장 및 수리비 데이터가 없습니다.")
-                else:
-                    st.warning("현장 정보가 없습니다.")
-            
-            with col2:
-                st.subheader("정비자별 수리비 Top 15")
-                
-                # 정비자별 수리비 합계
-                if '정비자번호' in df.columns and '정비자' in df.columns:
-                    # 유효한 데이터만 필터링
-                    valid_data = df.dropna(subset=['정비자번호', '정비자', '수리비'])
-                    
-                    if not valid_data.empty:
-                        # 정비자번호와 이름 조합
-                        valid_data['정비자정보'] = valid_data['정비자'].astype(str) + " (" + valid_data['정비자번호'].astype(str) + ")"
-                        worker_costs = valid_data.groupby('정비자정보')['수리비'].sum().sort_values(ascending=False).head(15)
-                        
-                        # 그래프 생성
-                        fig, ax = create_figure(figsize=(10, 8), dpi=150)
-                        sns.barplot(x=worker_costs.values, y=worker_costs.index, ax=ax, palette="Blues_r")
-                        
-                        # 값 표시
-                        for i, v in enumerate(worker_costs.values):
-                            ax.text(v + v*0.01, i, f"{v:,.0f}원", va='center', fontsize=8)
-                        
-                        ax.set_xlabel('총 수리비 (원)')
-                        plt.tight_layout()
-                        
-                        st.pyplot(fig, use_container_width=True)
-                        st.markdown(get_image_download_link(fig, f'{category_name}_정비자별_수리비_Top15.png', '정비자별 수리비 Top15 다운로드'), unsafe_allow_html=True)
-                    else:
-                        st.warning("유효한 정비자 및 수리비 데이터가 없습니다.")
-                else:
-                    st.warning("정비자 정보가 없습니다.")
-            
-            # 자주 사용되는 부품 분석
-            if '사용부품' in df.columns:
-                st.subheader("자주 사용되는 부품 분석")
-                
-                # 부품 데이터 추출 및 처리
-                parts_data = []
-                for parts_str in df['사용부품'].dropna():
-                    if isinstance(parts_str, str) and parts_str.strip():
-                        # 쉼표로 구분된 부품 목록 처리
-                        parts = [p.strip() for p in parts_str.split(',')]
-                        parts_data.extend(parts)
-                
-                # 부품별 빈도 계산
-                parts_counter = Counter(parts_data)
-                top_parts = parts_counter.most_common(15)
-                
-                if top_parts:
-                    # 데이터프레임 생성
-                    parts_df = pd.DataFrame(top_parts, columns=['부품명', '사용빈도'])
-                    
-                    # 그래프 생성
-                    fig, ax = create_figure(figsize=(12, 8), dpi=150)
-                    sns.barplot(x='사용빈도', y='부품명', data=parts_df, ax=ax, palette="Blues_r")
-                    
-                    # 값 표시
-                    for i, v in enumerate(parts_df['사용빈도']):
-                        ax.text(v + 0.1, i, str(v), va='center')
-                    
-                    ax.set_xlabel('사용 빈도')
-                    plt.tight_layout()
-                    
-                    st.pyplot(fig, use_container_width=True)
-                    st.markdown(get_image_download_link(fig, f'{category_name}_자주사용부품_Top15.png', '자주 사용되는 부품 Top15 다운로드'), unsafe_allow_html=True)
-                else:
-                    st.warning("부품 사용 데이터가 없습니다.")
+                        st.warning("부품 사용 데이터가 없습니다.")
 
 # 정비구분 컬럼 확인 및 값 검증
 if '정비구분' in df1.columns and df1['정비구분'].notna().any():

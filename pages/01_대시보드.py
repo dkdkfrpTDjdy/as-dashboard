@@ -268,107 +268,63 @@ def display_integrated_dashboard(df, category_name, key_prefix):
             else:
                 st.warning("지역 정보가 없습니다.")
     
-    # 3. 소속별 분석 - 문제가 있는 부분 수정
+    # 3. 소속별 분석
     if "소속별 분석" in sections:
         with st.expander("소속별 분석", expanded=True):
-            # 정비자 소속별 분석
-            if '정비자소속' in df.columns:
+            # 미리 계산된 소속별 통계 사용
+            if 'dept_repair_stats' in st.session_state and st.session_state.dept_repair_stats is not None:
                 col1, col2 = st.columns(2)
-                
-                # 조직도 데이터 확인
-                df4 = pd.DataFrame()
-                if 'df4' in st.session_state and st.session_state.df4 is not None and '소속' in st.session_state.df4.columns:
-                    df4 = st.session_state.df4  # 조직도 데이터
-                    total_staff_by_dept = df4['소속'].value_counts()
-                else:
-                    # 조직도 데이터가 없으면 기본값 생성
-                    total_staff_by_dept = pd.Series(1, index=df['정비자소속'].dropna().unique())
-                    st.info("조직도 데이터가 없어 소속별 인원 정보를 사용할 수 없습니다.")
                 
                 with col1:
                     st.subheader("정비자 소속별 건수")
                     
-                    # 소속별 정비 건수 계산
-                    dept_counts = df['정비자소속'].value_counts().head(10)
+                    # 미리 계산된 통계 사용
+                    dept_stats = st.session_state.dept_repair_stats
                     
-                    if not dept_counts.empty:
-                        dept_comparison = pd.DataFrame({
-                            '소속': dept_counts.index,
-                            '정비건수': dept_counts.values,
-                            '소속인원수': [total_staff_by_dept.get(dept, 1) for dept in dept_counts.index]
-                        })
-                        
-                        # 인원당 정비 건수 계산
-                        dept_comparison['인원당건수'] = (dept_comparison['정비건수'] / dept_comparison['소속인원수']).round(1)
-                        
-                        # 결과 정렬
-                        dept_comparison = dept_comparison.sort_values('인원당건수', ascending=False)
-                        
+                    # 상위 10개 소속 선택
+                    top_depts_by_count = dept_stats.sort_values('건수', ascending=False).head(10)
+                    
+                    if not top_depts_by_count.empty:
                         # 그래프 생성
                         fig, ax = create_figure(figsize=(10, 8), dpi=150)
-                        sns.barplot(x=dept_comparison['인원당건수'], y=dept_comparison['소속'], ax=ax, palette="Blues_r")
+                        sns.barplot(x='건수', y='정비자소속', data=top_depts_by_count, ax=ax, palette="Blues_r")
                         
                         # 막대 위에 텍스트 표시
-                        for i, row in enumerate(dept_comparison.itertuples()):
-                            ax.text(row.인원당건수 + 0.1, i, f"{row.인원당건수:.1f}건/인", va='center', fontsize=8)
+                        for i, row in enumerate(top_depts_by_count.itertuples()):
+                            ax.text(row.건수 + 0.5, i, f"{row.건수}건", va='center', fontsize=8)
                         
-                        ax.set_xlabel('인원당 정비 건수')
+                        ax.set_xlabel('정비 건수')
                         plt.tight_layout()
                         
                         st.pyplot(fig, use_container_width=True)
-                        st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당정비건수.png', '소속별 인원당정비건수 다운로드'), unsafe_allow_html=True)
+                        st.markdown(get_image_download_link(fig, f'{category_name}_소속별_정비건수.png', '소속별 정비건수 다운로드'), unsafe_allow_html=True)
                     else:
-                        st.warning("정비자 소속 데이터가 없습니다.")
+                        st.warning("소속별 정비 건수 데이터가 없습니다.")
                 
                 with col2:
-                    if '수리비' in df.columns:
-                        st.subheader("정비자 소속별 수리비")
+                    st.subheader("정비자 소속별 수리비")
+                    
+                    # 상위 10개 소속 선택 (인원당 수리비 기준)
+                    top_depts_by_cost = dept_stats.sort_values('인원당수리비', ascending=False).head(10)
+                    
+                    if not top_depts_by_cost.empty:
+                        # 그래프 생성
+                        fig, ax = create_figure(figsize=(10, 8), dpi=150)
+                        sns.barplot(x='인원당수리비', y='정비자소속', data=top_depts_by_cost, ax=ax, palette="Blues_r")
                         
-                        # 유효한 데이터만 사용 (안전하게 필터링)
-                        df_valid = df[['정비자소속', '수리비']].copy()
-                        df_valid = df_valid.dropna()
+                        # 막대 위에 텍스트 표시
+                        for i, row in enumerate(top_depts_by_cost.itertuples()):
+                            ax.text(row.인원당수리비 + 100, i, f"{row.인원당수리비:,.0f}원/인", va='center', fontsize=8)
                         
-                        if not df_valid.empty:
-                            try:
-                                # 소속별 총 수리비 계산
-                                dept_total_cost = df_valid.groupby('정비자소속')['수리비'].sum().sort_values(ascending=False).head(10)
-                                
-                                if not dept_total_cost.empty:
-                                    dept_cost_comparison = pd.DataFrame({
-                                        '소속': dept_total_cost.index,
-                                        '총수리비': dept_total_cost.values,
-                                        '소속인원수': [total_staff_by_dept.get(dept, 1) for dept in dept_total_cost.index]
-                                    })
-                                    
-                                    # 인원당 수리비 계산
-                                    dept_cost_comparison['인원당수리비'] = (dept_cost_comparison['총수리비'] / dept_cost_comparison['소속인원수']).round(0)
-                                    
-                                    # 결과 정렬
-                                    dept_cost_comparison = dept_cost_comparison.sort_values('인원당수리비', ascending=False)
-                                    
-                                    # 그래프 생성
-                                    fig, ax = create_figure(figsize=(10, 8), dpi=150)
-                                    sns.barplot(x='인원당수리비', y='소속', data=dept_cost_comparison, ax=ax, palette="Blues_r")
-                                    
-                                    # 막대 위에 텍스트 표시
-                                    for i, row in enumerate(dept_cost_comparison.itertuples()):
-                                        ax.text(row.인원당수리비 + 100, i, f"{row.인원당수리비:,.0f}원/인", va='center', fontsize=8)
-                                    
-                                    ax.set_xlabel('인원당 수리비 (원)')
-                                    plt.tight_layout()
-                                    
-                                    st.pyplot(fig, use_container_width=True)
-                                    st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당수리비.png', '소속별 인원당수리비 다운로드'), unsafe_allow_html=True)
-                                else:
-                                    st.warning("소속별 수리비 데이터가 없습니다.")
-                            except Exception as e:
-                                st.error(f"소속별 수리비 분석 중 오류가 발생했습니다: {e}")
-                        else:
-                            st.warning("유효한 수리비 또는 정비자소속 데이터가 없습니다.")
+                        ax.set_xlabel('인원당 수리비 (원)')
+                        plt.tight_layout()
+                        
+                        st.pyplot(fig, use_container_width=True)
+                        st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당수리비.png', '소속별 인원당수리비 다운로드'), unsafe_allow_html=True)
                     else:
-                        st.warning("수리비 컬럼이 없습니다.")
+                        st.warning("소속별 수리비 데이터가 없습니다.")
             else:
-                st.warning("정비자소속 정보가 없습니다.")
+                st.info("소속별 분석 데이터가 준비되지 않았습니다. 홈 화면에서 데이터를 다시 로드해 주세요.")
     
     # 4. 수리비 상세 분석
     if "수리비 상세 분석" in sections and '수리비' in df.columns:

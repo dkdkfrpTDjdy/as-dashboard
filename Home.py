@@ -251,6 +251,9 @@ if 'df1_processed' in st.session_state:
         
         # 추가 전처리
         df1_with_costs = preprocess_maintenance_data(df1_with_costs)
+
+        from utils.data_processing import generate_fault_type_column
+        df1_with_costs = generate_fault_type_column(df1_with_costs)
         
         # 소속별 수리비 통계 계산
         dept_stats = calculate_dept_repair_stats(df1_with_costs, df4)

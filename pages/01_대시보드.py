@@ -300,14 +300,15 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     
                     # 상위 10개 소속 선택
                     top_depts_by_count = dept_stats.sort_values('건수', ascending=False).head(10)
+                    top_depts_by_count2 = top_depts_by_count[top_depts_by_count['건수'] > 3]
                     
-                    if not top_depts_by_count.empty:
+                    if not top_depts_by_count2.empty:
                         # 그래프 생성
                         fig, ax = create_figure(figsize=(10, 8), dpi=150)
                         sns.barplot(x='건수', y='정비자소속', data=top_depts_by_count, ax=ax, palette="Blues_r")
                         
                         # 막대 위에 텍스트 표시
-                        for i, row in enumerate(top_depts_by_count.itertuples()):
+                        for i, row in enumerate(top_depts_by_count2.itertuples()):
                             ax.text(row.건수 + 0.5, i, f"{row.건수}건", va='center', fontsize=8)
                         
                         ax.set_xlabel('정비 건수')
@@ -320,7 +321,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                 
                 # 파트별 건수 대비 수리비 부분 수정
                 with col2:
-                    st.subheader("파트별 건수 대비 수리비 효율성")
+                    st.subheader("파트별 건수 대비 수리비")
                     
                     if not dept_stats.empty and '총수리비' in dept_stats.columns and '건수' in dept_stats.columns:
                         # 3건 초과인 소속만 필터링
@@ -342,7 +343,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         fig, ax = create_figure(figsize=(12, 8), dpi=150)
                         
                         # 효율성 지수에 따라 색상 결정 (1보다 크면 빨간색, 작으면 파란색)
-                        colors = ['#2ecc71' if x > 1 else '#bdc3c7' for x in sorted_depts['효율성지수']]
+                        colors = ["#1c66f0" if x > 1 else '#bdc3c7' for x in sorted_depts['효율성지수']]
                         
                         # 효율성 지수 막대 그래프
                         bars = ax.bar(sorted_depts['정비자소속'], sorted_depts['효율성지수'], color=colors)
@@ -356,8 +357,8 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         # 막대 위에 텍스트 표시
                         for i, bar in enumerate(bars):
                             height = bar.get_height()
-                            ax.text(bar.get_x() + bar.get_width()/2., height + 0.05,
-                                    f'{height:.2f}', ha='center', va='bottom', fontsize=9)
+                            ax.text(bar.get_x() + bar.get_width()/2., height + 0.02,
+                                    f'{height:.2f}', ha='center', va='bottom', fontsize=10)
                         
                         plt.tight_layout()
                         
@@ -415,7 +416,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     st.warning("현장 정보가 없습니다.")
             
                 with col2:
-                    st.subheader("정비자별 건수 대비 수리비 효율성")
+                    st.subheader("정비자별 건수 대비 수리비")
                     
                     # 정비자별 수리비 분석
                     if '정비자' in df.columns:
@@ -455,13 +456,13 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                                 worker_stats['효율성지수'] = worker_stats['수리비비율'] / worker_stats['건수비율']
                                 
                                 # 효율성 지수 기준으로 정렬
-                                sorted_workers = worker_stats.sort_values('효율성지수', ascending=False).head(10)
+                                sorted_workers = worker_stats.sort_values('효율성지수', ascending=False).head(15)
                                 
                                 # 그래프 생성
-                                fig, ax = create_figure(figsize=(12, 8), dpi=150)
+                                fig, ax = create_figure(figsize=(10, 8), dpi=150)
                                 
                                 # 효율성 지수에 따라 색상 결정 (1보다 크면 초록색, 작으면 회색)
-                                colors = ['#2ecc71' if x > 1 else '#bdc3c7' for x in sorted_workers['효율성지수']]
+                                colors = ['#1c66f0' if x > 1 else '#bdc3c7' for x in sorted_workers['효율성지수']]
                                 
                                 # 효율성 지수 막대 그래프
                                 bars = ax.bar(sorted_workers['정비자정보'], sorted_workers['효율성지수'], color=colors)
@@ -486,14 +487,6 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                                 # 효율성 지수에 대한 설명 추가
                                 st.info("1 초과: 건수 대비 수리비가 많이 소요됨 / 1 미만: 효율적인 비용으로 수리함")
                                 
-                                # 데이터 테이블로도 표시
-                                display_cols = ['정비자정보', '건수', '총수리비', '건수비율', '수리비비율', '효율성지수']
-                                st.dataframe(sorted_workers[display_cols].style.format({
-                                    '건수비율': '{:.2f}%',
-                                    '수리비비율': '{:.2f}%',
-                                    '효율성지수': '{:.2f}',
-                                    '총수리비': '{:,.0f}원'
-                                }))
                             else:
                                 st.warning("30건 이상 처리한 정비자 데이터가 없습니다.")
                         else:

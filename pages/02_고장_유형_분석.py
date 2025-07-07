@@ -40,6 +40,7 @@ def display_fault_analysis(df, maintenance_type=None):
         st.warning("고장 유형 분석에 필요한 컬럼(작업유형, 정비대상, 정비작업)이 누락되었습니다.")
         return
 
+    # --- 탭별 분석 ---
     category_tabs = {
         "작업유형": "작업유형",
         "정비대상": "정비대상",
@@ -130,78 +131,80 @@ def display_fault_analysis(df, maintenance_type=None):
                 else:
                     st.info("히트맵을 생성할 데이터가 충분하지 않습니다.")
 
-        with st.expander("장비 특성별 분석", expanded=True):
-            st.subheader(f"{title_prefix}모델 타입 분석")
+    # --- 탭 루프 바깥: 장비 특성 분석 ---
+    with st.expander("장비 특성별 분석", expanded=True):
+        st.subheader(f"{title_prefix}모델 타입 분석")
 
-            model_type_options = [col for col in ['연료', '운전방식', '적재용량', '마스트']
-                                  if col in filtered_df.columns and filtered_df[col].notna().any()]
+        model_type_options = [col for col in ['연료', '운전방식', '적재용량', '마스트']
+                              if col in filtered_df.columns and filtered_df[col].notna().any()]
 
-            if model_type_options:
-                selected_type = st.selectbox(
-                    "분석 항목 선택",
-                    model_type_options,
-                    key=f"{unique_prefix}_model_type_selector"
-                )
+        if model_type_options:
+            selected_type = st.selectbox(
+                "분석 항목 선택",
+                model_type_options,
+                key=f"{unique_prefix}_model_type_selector"
+            )
 
-                if selected_type:
-                    col1, col2 = st.columns(2)
+            if selected_type:
+                col1, col2 = st.columns(2)
 
-                    with col1:
-                        st.subheader(f"{title_prefix}{selected_type}별 AS 건수")
-                        type_counts = filtered_df[selected_type].value_counts().dropna()
-                        if len(type_counts) > 0:
-                            if len(type_counts) > 15:
-                                type_counts = type_counts.head(15)
+                with col1:
+                    st.subheader(f"{title_prefix}{selected_type}별 AS 건수")
+                    type_counts = filtered_df[selected_type].value_counts().dropna()
+                    if len(type_counts) > 0:
+                        if len(type_counts) > 15:
+                            type_counts = type_counts.head(15)
+                        fig, ax = create_figure(figsize=(10, 8), dpi=150)
+                        sns.barplot(x=type_counts.index, y=type_counts.values, ax=ax, palette=f"{current_theme}_r")
+                        for i, v in enumerate(type_counts.values):
+                            ax.text(i, v + max(type_counts.values) * 0.01, str(v), ha='center', fontsize=10)
+                        plt.xticks(rotation=45, ha='right')
+                        plt.tight_layout()
+                        st.pyplot(fig, use_container_width=True)
+                        st.markdown(get_image_download_link(fig, f'{title_prefix}{selected_type}별_AS_건수.png', f'{selected_type}별 AS 건수 다운로드'), unsafe_allow_html=True)
+                    else:
+                        st.warning(f"{selected_type} 데이터가 없습니다.")
+
+                with col2:
+                    st.subheader(f"{title_prefix}{selected_type}별 고장유형")
+                    type_values = ["전체"] + filtered_df[selected_type].value_counts().index.tolist()
+                    selected_value = st.selectbox(
+                        selected_type,
+                        type_values,
+                        key=f"{unique_prefix}_{selected_type}_value"
+                    )
+
+                    filtered_df_type = filtered_df if selected_value == "전체" else filtered_df[filtered_df[selected_type] == selected_value]
+
+                    if '고장유형' in filtered_df_type.columns:
+                        top_faults_by_type = filtered_df_type['고장유형'].value_counts().head(10)
+                        if not top_faults_by_type.empty:
                             fig, ax = create_figure(figsize=(10, 8), dpi=150)
-                            sns.barplot(x=type_counts.index, y=type_counts.values, ax=ax, palette=f"{current_theme}_r")
-                            for i, v in enumerate(type_counts.values):
-                                ax.text(i, v + max(type_counts.values) * 0.01, str(v), ha='center', fontsize=10)
-                            plt.xticks(rotation=45, ha='right')
+                            sns.barplot(x=top_faults_by_type.values, y=top_faults_by_type.index, ax=ax, palette=f"{current_theme}_r")
+                            for i, v in enumerate(top_faults_by_type.values):
+                                ax.text(v + max(top_faults_by_type.values) * 0.002, i, str(v), va='center', fontsize=10)
                             plt.tight_layout()
                             st.pyplot(fig, use_container_width=True)
-                            st.markdown(get_image_download_link(fig, f'{title_prefix}{selected_type}별_AS_건수.png', f'{selected_type}별 AS 건수 다운로드'), unsafe_allow_html=True)
+                            st.markdown(get_image_download_link(fig, f'{title_prefix}{selected_value}_고장유형_TOP10.png', f'{selected_value} 고장유형 TOP10 다운로드'), unsafe_allow_html=True)
                         else:
-                            st.warning(f"{selected_type} 데이터가 없습니다.")
+                            st.info(f"{selected_type}({selected_value})에 대한 고장유형 데이터가 없습니다.")
+                    else:
+                        st.warning("고장유형 데이터가 없습니다.")
+        else:
+            st.warning("장비 특성 데이터(연료, 운전방식, 적재용량, 마스트)가 없습니다.")
 
-                    with col2:
-                        st.subheader(f"{title_prefix}{selected_type}별 고장유형")
-                        type_values = ["전체"] + filtered_df[selected_type].value_counts().index.tolist()
-                        selected_value = st.selectbox(
-                            selected_type,
-                            type_values,
-                            key=f"{unique_prefix}_{tab_name}_{selected_type}_value"
-                        )
-
-                        filtered_df_type = filtered_df if selected_value == "전체" else filtered_df[filtered_df[selected_type] == selected_value]
-
-                        if '고장유형' in filtered_df_type.columns:
-                            top_faults_by_type = filtered_df_type['고장유형'].value_counts().head(10)
-                            if not top_faults_by_type.empty:
-                                fig, ax = create_figure(figsize=(10, 8), dpi=150)
-                                sns.barplot(x=top_faults_by_type.values, y=top_faults_by_type.index, ax=ax, palette=f"{current_theme}_r")
-                                for i, v in enumerate(top_faults_by_type.values):
-                                    ax.text(v + max(top_faults_by_type.values) * 0.002, i, str(v), va='center', fontsize=10)
-                                plt.tight_layout()
-                                st.pyplot(fig, use_container_width=True)
-                                st.markdown(get_image_download_link(fig, f'{title_prefix}{selected_value}_고장유형_TOP10.png', f'{selected_value} 고장유형 TOP10 다운로드'), unsafe_allow_html=True)
-                            else:
-                                st.info(f"{selected_type}({selected_value})에 대한 고장유형 데이터가 없습니다.")
-                        else:
-                            st.warning("고장유형 데이터가 없습니다.")
-            else:
-                st.warning("장비 특성 데이터(연료, 운전방식, 적재용량, 마스트)가 없습니다.")
-
-        with st.expander("상위 고장 유형 목록", expanded=False):
-            st.subheader(f"{title_prefix}상위 고장 유형")
-            if '고장유형' in filtered_df.columns:
-                top_40_faults = filtered_df['고장유형'].value_counts().nlargest(40)
-                fault_df = pd.DataFrame({
-                    '고장유형': top_40_faults.index,
-                    '건수': top_40_faults.values
-                })
-                st.dataframe(fault_df, use_container_width=True)
-            else:
-                st.warning("고장유형 데이터가 없습니다.")
+    # --- 탭 루프 바깥: 상위 고장유형 표 ---
+    with st.expander("상위 고장 유형 목록", expanded=False):
+        st.subheader(f"{title_prefix}상위 고장 유형")
+        if '고장유형' in filtered_df.columns:
+            top_40_faults = filtered_df['고장유형'].value_counts().nlargest(40)
+            fault_df = pd.DataFrame({
+                '고장유형': top_40_faults.index,
+                '건수': top_40_faults.values
+            })
+            st.dataframe(fault_df, use_container_width=True)
+        else:
+            st.warning("고장유형 데이터가 없습니다.")
 
 # 정비구분 컬럼 확인
 if '정비구분' in df1.columns and df1['정비구분'].notna().any():

@@ -249,7 +249,7 @@ if '브랜드' in df1.columns:
                 
                 # 간결한 값 표시
                 for i, v in enumerate(fault_ratio.values):
-                    ax.text(v + 0.01, i, f"{v:.1f}%", va='center', fontsize=8)
+                    ax.text(v + 0.005, i, f"{v:.1f}%", va='center', fontsize=8)
                     
                 ax.set_xlabel('고장유형 비율 (%)')
                 plt.tight_layout()
@@ -338,7 +338,7 @@ if '브랜드' in df1.columns:
                         
                         # 값 표시 (간결하게)
                         for i, v in enumerate(top_models['AS/자산 비율']):
-                            ax.text(v + 0.02, i, f"{v:.1f}", va='center', fontsize=9)
+                            ax.text(v + 0.01, i, f"{v:.1f}", va='center', fontsize=9)
                             
                         ax.set_xlabel('AS/자산 비율 (1.0 = 동일 비율)')
                         plt.tight_layout()
@@ -421,7 +421,7 @@ if '브랜드' in df1.columns:
                                              
                             # 간결한 값 표시
                             for i, v in enumerate(year_avg_interval.values):
-                                ax.text(i, v + 0.02, f"{v:.1f}일", ha='center', fontsize=7)
+                                ax.text(i, v + 0.02, f"{v:.1f}", ha='center', fontsize=7)
                                 
                             plt.xticks(rotation=45)
                             ax.set_ylabel('평균 재정비간격 (일)')
@@ -482,10 +482,10 @@ if '브랜드' in df1.columns:
                                 
                                 # 간결한 값 표시
                                 for i, v in enumerate(year_comparison['자산 비율(%)']):
-                                    ax.text(i - width/2, v + 0.1, f"{v:.1f}%", ha='center', fontsize=7)
+                                    ax.text(i - width/2, v + 0.1, f"{v:.1f}%", ha='center', fontsize=5)
                                     
                                 for i, v in enumerate(year_comparison['AS 비율(%)']):
-                                    ax.text(i + width/2, v + 0.4, f"{v:.1f}%", ha='center', fontsize=7)
+                                    ax.text(i + width/2, v + 0.4, f"{v:.1f}%", ha='center', fontsize=5)
                                     
                                 plt.tight_layout()
                                 st.pyplot(fig)

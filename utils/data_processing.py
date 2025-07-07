@@ -64,16 +64,18 @@ def extract_region_from_address(address):
     if not isinstance(address, str):
         return None, None
 
-    # 표준 시/도 리스트
+    address = address.strip()
+
     region_prefixes = ['서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종',
                        '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주']
 
-    address = address.strip()
-    for prefix in region_prefixes:
-        if address.startswith(prefix):
-            parts = address[len(prefix):].strip().split()
-            if parts and any(p.endswith(('시', '군', '구')) for p in parts[:1]):
-                return prefix, address
+    tokens = address.split()
+    if len(tokens) < 2:
+        return None, None
+
+    first, second = tokens[0], tokens[1]
+    if first in region_prefixes and second.endswith(('시', '군', '구')):
+        return first, address
 
     return None, None
 

@@ -190,79 +190,79 @@ def display_integrated_dashboard(df, category_name, key_prefix):
             # 두 번째 줄: 월별 평균 지표와 수리시간 분포
             col3, col4 = st.columns(2)
             
-        with col3:
-            # 월별 평균 지표
-            st.subheader("월별 평균 지표")
-            if '정비일자' in df.columns:
-                # 기본 차트 옵션 설정 (초기 표시할 차트)
-                default_chart = "월별 평균 가동시간"
-                
-                # 먼저 기본 차트 표시
-                if default_chart == "월별 평균 가동시간" and operation_col in df.columns:
-                    # 데이터 준비
-                    df_op = df.copy()
-                    df_op['월'] = df_op['정비일자'].dt.to_period('M')
-                    monthly_avg = df_op.groupby('월')[operation_col].mean().reset_index()
-                    monthly_avg['월'] = monthly_avg['월'].astype(str)
+            with col3:
+                # 월별 평균 지표
+                st.subheader("월별 평균 지표")
+                if '정비일자' in df.columns:
+                    # 기본 차트 옵션 설정 (초기 표시할 차트)
+                    default_chart = "월별 평균 가동시간"
                     
-                    # 그래프 생성
-                    fig, ax = create_figure(figsize=(10, 6), dpi=150)
-                    sns.barplot(data=monthly_avg, x='월', y=operation_col, ax=ax, palette="Blues")
-                    
-                    # 평균값 텍스트 표시
-                    for index, row in monthly_avg.iterrows():
-                        ax.text(index, row[operation_col] + 0.2, f"{row[operation_col]:.1f}시간", ha='center')
-                    
-                    plt.xticks(rotation=45)
-                    plt.tight_layout()
-                    
-                    st.pyplot(fig, use_container_width=True)
-                    st.markdown(get_image_download_link(fig, f'{category_name}_월별_평균_가동시간.png', '월별 평균 가동시간 다운로드'), unsafe_allow_html=True)
-                else:
-                    if operation_col not in df.columns:
-                        st.warning("가동시간 데이터가 없습니다.")
-                
-                # 차트 선택 라디오 버튼을 그래프 아래에 배치
-                chart_option = st.radio(
-                    "차트 선택", 
-                    ["월별 평균 가동시간", "월별 평균 수리비"],
-                    key=f"{key_prefix}_chart_option",
-                    horizontal=True  # 수평으로 배치하여 공간 절약
-                )
-                
-                # 선택된 차트가 기본 차트와 다를 경우에만 다시 그리기
-                if chart_option != default_chart:
-                    if chart_option == "월별 평균 수리비" and '수리비' in df.columns:
+                    # 먼저 기본 차트 표시
+                    if default_chart == "월별 평균 가동시간" and operation_col in df.columns:
                         # 데이터 준비
-                        df_cost = df.copy()
-                        df_cost['월'] = df_cost['정비일자'].dt.to_period('M')
-                        monthly_cost_avg = df_cost.groupby('월')['수리비'].mean().reset_index()
-                        monthly_cost_avg['월'] = monthly_cost_avg['월'].astype(str)
+                        df_op = df.copy()
+                        df_op['월'] = df_op['정비일자'].dt.to_period('M')
+                        monthly_avg = df_op.groupby('월')[operation_col].mean().reset_index()
+                        monthly_avg['월'] = monthly_avg['월'].astype(str)
                         
                         # 그래프 생성
                         fig, ax = create_figure(figsize=(10, 6), dpi=150)
-                        sns.barplot(x='월', y='수리비', data=monthly_cost_avg, ax=ax, palette="Blues")
+                        sns.barplot(data=monthly_avg, x='월', y=operation_col, ax=ax, palette="Blues")
                         
                         # 평균값 텍스트 표시
-                        for i, v in enumerate(monthly_cost_avg['수리비']):
-                            ax.text(i, v + max(monthly_cost_avg['수리비']) * 0.01, f"{v:,.0f}원", ha='center', fontsize=8)
+                        for index, row in monthly_avg.iterrows():
+                            ax.text(index, row[operation_col] + 0.2, f"{row[operation_col]:.1f}시간", ha='center')
                         
                         plt.xticks(rotation=45)
-                        ax.set_ylabel('평균 수리비 (원)')
                         plt.tight_layout()
                         
                         st.pyplot(fig, use_container_width=True)
-                        st.markdown(get_image_download_link(fig, f'{category_name}_월별_평균_수리비.png', '월별 평균 수리비 다운로드'), unsafe_allow_html=True)
-                    elif chart_option == "월별 평균 가동시간" and operation_col in df.columns:
-                        # 이미 위에서 표시했으므로 여기서는 아무 작업도 하지 않음
-                        pass
+                        st.markdown(get_image_download_link(fig, f'{category_name}_월별_평균_가동시간.png', '월별 평균 가동시간 다운로드'), unsafe_allow_html=True)
                     else:
-                        if chart_option == "월별 평균 가동시간":
+                        if operation_col not in df.columns:
                             st.warning("가동시간 데이터가 없습니다.")
+                    
+                    # 차트 선택 라디오 버튼을 그래프 아래에 배치
+                    chart_option = st.radio(
+                        "차트 선택", 
+                        ["월별 평균 가동시간", "월별 평균 수리비"],
+                        key=f"{key_prefix}_chart_option",
+                        horizontal=True  # 수평으로 배치하여 공간 절약
+                    )
+                    
+                    # 선택된 차트가 기본 차트와 다를 경우에만 다시 그리기
+                    if chart_option != default_chart:
+                        if chart_option == "월별 평균 수리비" and '수리비' in df.columns:
+                            # 데이터 준비
+                            df_cost = df.copy()
+                            df_cost['월'] = df_cost['정비일자'].dt.to_period('M')
+                            monthly_cost_avg = df_cost.groupby('월')['수리비'].mean().reset_index()
+                            monthly_cost_avg['월'] = monthly_cost_avg['월'].astype(str)
+                            
+                            # 그래프 생성
+                            fig, ax = create_figure(figsize=(10, 6), dpi=150)
+                            sns.barplot(x='월', y='수리비', data=monthly_cost_avg, ax=ax, palette="Blues")
+                            
+                            # 평균값 텍스트 표시
+                            for i, v in enumerate(monthly_cost_avg['수리비']):
+                                ax.text(i, v + max(monthly_cost_avg['수리비']) * 0.01, f"{v:,.0f}원", ha='center', fontsize=8)
+                            
+                            plt.xticks(rotation=45)
+                            ax.set_ylabel('평균 수리비 (원)')
+                            plt.tight_layout()
+                            
+                            st.pyplot(fig, use_container_width=True)
+                            st.markdown(get_image_download_link(fig, f'{category_name}_월별_평균_수리비.png', '월별 평균 수리비 다운로드'), unsafe_allow_html=True)
+                        elif chart_option == "월별 평균 가동시간" and operation_col in df.columns:
+                            # 이미 위에서 표시했으므로 여기서는 아무 작업도 하지 않음
+                            pass
                         else:
-                            st.warning("수리비 데이터가 없습니다.")
-            else:
-                st.warning("정비일자 컬럼이 없어 월별 분석을 수행할 수 없습니다.")
+                            if chart_option == "월별 평균 가동시간":
+                                st.warning("가동시간 데이터가 없습니다.")
+                            else:
+                                st.warning("수리비 데이터가 없습니다.")
+                else:
+                    st.warning("정비일자 컬럼이 없어 월별 분석을 수행할 수 없습니다.")  
             
             with col4:
                 # 수리시간 분포
@@ -290,7 +290,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                 else:
                     st.warning("수리시간 데이터가 없습니다.")
     
-    # 3. 소속별 분석
+    # 소속별 분석 부분 수정
     if "소속별 분석" in sections:
         with st.expander("소속별 분석", expanded=True):
             # 미리 계산된 소속별 통계 사용
@@ -324,31 +324,38 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         st.warning("소속별 정비 건수 데이터가 없습니다.")
                 
                 with col2:
-                    st.subheader("정비자 소속별 수리비")
+                    st.subheader("정비자 소속별 건당 평균 수리비")
                     
-                    # 상위 10개 소속 선택 (인원당 수리비 기준)
-                    top_depts_by_cost = dept_stats.sort_values('인원당수리비', ascending=False).head(10)
-                    
-                    if not top_depts_by_cost.empty:
-                        # 그래프 생성
-                        fig, ax = create_figure(figsize=(10, 8), dpi=150)
-                        sns.barplot(x='인원당수리비', y='정비자소속', data=top_depts_by_cost, ax=ax, palette="Blues_r")
+                    # 건당 평균 수리비 계산
+                    if '총수리비' in dept_stats.columns and '건수' in dept_stats.columns:
+                        # 건당 평균 수리비 계산
+                        dept_stats['건당평균수리비'] = dept_stats['총수리비'] / dept_stats['건수']
                         
-                        # 막대 위에 텍스트 표시
-                        for i, row in enumerate(top_depts_by_cost.itertuples()):
-                            ax.text(row.인원당수리비 + 100, i, f"{row.인원당수리비:,.0f}원/인", va='center', fontsize=8)
+                        # 상위 10개 소속 선택 (건당 평균 수리비 기준)
+                        top_depts_by_avg_cost = dept_stats.sort_values('건당평균수리비', ascending=False).head(10)
                         
-                        ax.set_xlabel('인원당 수리비 (원)')
-                        plt.tight_layout()
-                        
-                        st.pyplot(fig, use_container_width=True)
-                        st.markdown(get_image_download_link(fig, f'{category_name}_소속별_인원당수리비.png', '소속별 인원당수리비 다운로드'), unsafe_allow_html=True)
+                        if not top_depts_by_avg_cost.empty:
+                            # 그래프 생성
+                            fig, ax = create_figure(figsize=(10, 8), dpi=150)
+                            sns.barplot(x='건당평균수리비', y='정비자소속', data=top_depts_by_avg_cost, ax=ax, palette="Blues_r")
+                            
+                            # 막대 위에 텍스트 표시
+                            for i, row in enumerate(top_depts_by_avg_cost.itertuples()):
+                                ax.text(row.건당평균수리비 + 100, i, f"{row.건당평균수리비:,.0f}원/건", va='center', fontsize=8)
+                            
+                            ax.set_xlabel('건당 평균 수리비 (원)')
+                            plt.tight_layout()
+                            
+                            st.pyplot(fig, use_container_width=True)
+                            st.markdown(get_image_download_link(fig, f'{category_name}_소속별_건당평균수리비.png', '소속별 건당평균수리비 다운로드'), unsafe_allow_html=True)
+                        else:
+                            st.warning("소속별 건당 평균 수리비 데이터가 없습니다.")
                     else:
-                        st.warning("소속별 수리비 데이터가 없습니다.")
+                        st.warning("수리비 또는 건수 데이터가 없습니다.")
             else:
                 st.info("소속별 분석 데이터가 준비되지 않았습니다. 홈 화면에서 데이터를 다시 로드해 주세요.")
-    
-    # 4. 수리비 상세 분석
+
+    # 수리비 상세 분석 부분 수정
     if "수리비 상세 분석" in sections and '수리비' in df.columns:
         with st.expander("수리비 상세 분석", expanded=True):
             st.header("수리비 상세 분석")
@@ -356,60 +363,92 @@ def display_integrated_dashboard(df, category_name, key_prefix):
             col1, col2 = st.columns(2)
             
             with col1:
-                st.subheader("수리비 많은 현장 Top 15")
+                st.subheader("현장별 건당 평균 수리비 Top 15")
                 
-                # 현장별 수리비 합계
+                # 현장별 수리비 분석
                 if '현장명' in df.columns:
                     # 유효한 데이터만 필터링
                     valid_data = df.dropna(subset=['현장명', '수리비'])
                     
                     if not valid_data.empty:
-                        site_costs = valid_data.groupby('현장명')['수리비'].sum().sort_values(ascending=False).head(15)
+                        # 현장별 수리비 합계와 건수 계산
+                        site_stats = valid_data.groupby('현장명').agg({
+                            '수리비': ['sum', 'count']
+                        })
+                        site_stats.columns = ['총수리비', '건수']
+                        site_stats.reset_index(inplace=True)
+                        
+                        # 건당 평균 수리비 계산 (최소 2건 이상인 경우만)
+                        site_stats = site_stats[site_stats['건수'] >= 2]
+                        site_stats['건당평균수리비'] = site_stats['총수리비'] / site_stats['건수']
+                        
+                        # 건당 평균 수리비 기준 상위 15개 현장
+                        top_sites = site_stats.sort_values('건당평균수리비', ascending=False).head(15)
                         
                         # 그래프 생성
                         fig, ax = create_figure(figsize=(10, 8), dpi=150)
-                        sns.barplot(x=site_costs.values, y=site_costs.index, ax=ax, palette="Blues_r")
+                        sns.barplot(x=top_sites['건당평균수리비'], y=top_sites['현장명'], ax=ax, palette="Blues_r")
                         
-                        # 값 표시
-                        for i, v in enumerate(site_costs.values):
-                            ax.text(v + v*0.005, i, f"{v:,.0f}원", va='center', fontsize=6)
+                        # 값과 건수 함께 표시
+                        for i, row in enumerate(top_sites.itertuples()):
+                            ax.text(row.건당평균수리비 + row.건당평균수리비*0.005, i, 
+                                    f"{row.건당평균수리비:,.0f}원/건 ({row.건수}건)", 
+                                    va='center', fontsize=6)
                         
-                        ax.set_xlabel('총 수리비 (원)')
+                        ax.set_xlabel('건당 평균 수리비 (원)')
                         plt.tight_layout()
                         
                         st.pyplot(fig, use_container_width=True)
-                        st.markdown(get_image_download_link(fig, f'{category_name}_현장별_수리비_Top15.png', '현장별 수리비 Top15 다운로드'), unsafe_allow_html=True)
+                        st.markdown(get_image_download_link(fig, f'{category_name}_현장별_건당평균수리비_Top15.png', '현장별 건당평균수리비 Top15 다운로드'), unsafe_allow_html=True)
                     else:
                         st.warning("유효한 현장 및 수리비 데이터가 없습니다.")
                 else:
                     st.warning("현장 정보가 없습니다.")
             
             with col2:
-                st.subheader("정비자별 수리비 Top 15")
+                st.subheader("정비자별 건당 평균 수리비 Top 15")
                 
-                # 정비자별 수리비 합계
-                if '정비자번호' in df.columns and '정비자' in df.columns:
+                # 정비자별 수리비 분석
+                if '정비자' in df.columns:
                     # 유효한 데이터만 필터링
-                    valid_data = df.dropna(subset=['정비자소속', '정비자', '수리비'])
+                    valid_data = df.dropna(subset=['정비자', '수리비'])
                     
                     if not valid_data.empty:
                         # 정비자번호와 이름 조합
-                        valid_data['정비자정보'] = valid_data['정비자'].astype(str) + " (" + valid_data['정비자소속'].astype(str) + ")"
-                        worker_costs = valid_data.groupby('정비자정보')['수리비'].sum().sort_values(ascending=False).head(15)
+                        if '정비자소속' in valid_data.columns:
+                            valid_data['정비자정보'] = valid_data['정비자'].astype(str) + " (" + valid_data['정비자소속'].astype(str) + ")"
+                        else:
+                            valid_data['정비자정보'] = valid_data['정비자'].astype(str)
+                        
+                        # 정비자별 수리비 합계와 건수 계산
+                        worker_stats = valid_data.groupby('정비자정보').agg({
+                            '수리비': ['sum', 'count']
+                        })
+                        worker_stats.columns = ['총수리비', '건수']
+                        worker_stats.reset_index(inplace=True)
+                        
+                        # 건당 평균 수리비 계산 (최소 2건 이상인 경우만)
+                        worker_stats = worker_stats[worker_stats['건수'] >= 2]
+                        worker_stats['건당평균수리비'] = worker_stats['총수리비'] / worker_stats['건수']
+                        
+                        # 건당 평균 수리비 기준 상위 15개 정비자
+                        top_workers = worker_stats.sort_values('건당평균수리비', ascending=False).head(15)
                         
                         # 그래프 생성
                         fig, ax = create_figure(figsize=(10, 8), dpi=150)
-                        sns.barplot(x=worker_costs.values, y=worker_costs.index, ax=ax, palette="Blues_r")
+                        sns.barplot(x=top_workers['건당평균수리비'], y=top_workers['정비자정보'], ax=ax, palette="Blues_r")
                         
-                        # 값 표시
-                        for i, v in enumerate(worker_costs.values):
-                            ax.text(v + v*0.005, i, f"{v:,.0f}원", va='center', fontsize=6)
+                        # 값과 건수 함께 표시
+                        for i, row in enumerate(top_workers.itertuples()):
+                            ax.text(row.건당평균수리비 + row.건당평균수리비*0.005, i, 
+                                    f"{row.건당평균수리비:,.0f}원/건 ({row.건수}건)", 
+                                    va='center', fontsize=6)
                         
-                        ax.set_xlabel('총 수리비 (원)')
+                        ax.set_xlabel('건당 평균 수리비 (원)')
                         plt.tight_layout()
                         
                         st.pyplot(fig, use_container_width=True)
-                        st.markdown(get_image_download_link(fig, f'{category_name}_정비자별_수리비_Top15.png', '정비자별 수리비 Top15 다운로드'), unsafe_allow_html=True)
+                        st.markdown(get_image_download_link(fig, f'{category_name}_정비자별_건당평균수리비_Top15.png', '정비자별 건당평균수리비 Top15 다운로드'), unsafe_allow_html=True)
                     else:
                         st.warning("유효한 정비자 및 수리비 데이터가 없습니다.")
                 else:

@@ -342,7 +342,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         fig, ax = create_figure(figsize=(12, 8), dpi=150)
                         
                         # 효율성 지수에 따라 색상 결정 (1보다 크면 빨간색, 작으면 파란색)
-                        colors = ['red' if x > 1 else 'blue' for x in sorted_depts['효율성지수']]
+                        colors = ['#2ecc71' if x > 1 else '#bdc3c7' for x in sorted_depts['효율성지수']]
                         
                         # 효율성 지수 막대 그래프
                         bars = ax.bar(sorted_depts['정비자소속'], sorted_depts['효율성지수'], color=colors)
@@ -454,7 +454,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                             fig, ax = create_figure(figsize=(12, 8), dpi=150)
                             
                             # 효율성 지수에 따라 색상 결정 (1보다 크면 빨간색, 작으면 파란색)
-                            colors = ['red' if x > 1 else 'blue' for x in sorted_workers['효율성지수']]
+                            colors = ['#2ecc71' if x > 1 else '#bdc3c7' for x in sorted_depts['효율성지수']]
                             
                             # 효율성 지수 막대 그래프
                             bars = ax.bar(sorted_workers['정비자정보'], sorted_workers['효율성지수'], color=colors)

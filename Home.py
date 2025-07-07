@@ -260,6 +260,8 @@ if 'df1_processed' in st.session_state:
         if dept_stats is not None:
             st.session_state.dept_repair_stats = dept_stats
         
+        df1_with_costs = extract_and_apply_region(df1_with_costs)
+        
         # 결과 저장
         st.session_state.df1_with_costs = df1_with_costs
         st.success(message)

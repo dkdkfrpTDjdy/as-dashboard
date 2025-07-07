@@ -6,6 +6,7 @@ import streamlit as st
 from collections import Counter
 import traceback
 import datetime
+import re
 
 @st.cache_data
 def load_data(file):
@@ -58,25 +59,21 @@ def load_data(file):
         st.error(f"파일 로드 오류: {e}")
         return None
 
-# 주소에서 지역 추출 함수
 def extract_region_from_address(address):
-    """주소에서 지역 정보를 추출하는 함수"""
+    """주소에서 지역 정보를 추출하는 함수 - 정밀 개선 버전"""
     if not isinstance(address, str):
         return None, None
 
-    # 주소 형태인 경우만 처리
-    if len(address) >= 3:  # 최소 "시/도 " 형태 (3글자 이상) 필요
-        first_two = address[:2]
+    region_prefixes = ['서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종',
+                       '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주']
 
-        # 시/도 약칭 리스트
-        regions = ['서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종', 
-                  '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주']
+    # 지역 + 공백 + (시|군|구) + 공백 이상의 구조인 경우만 주소로 간주
+    for prefix in region_prefixes:
+        if address.startswith(prefix):
+            # 패턴 예: 서울 강남구 / 경기 수원시 권선구
+            if re.match(rf'^{prefix}\s+\S{{2,9}}(시|군|구)', address):
+                return prefix, address
 
-        # 첫 두 글자가 시/도이고 그 뒤에 공백이 있으면 주소로 간주
-        if first_two in regions and address[2] == ' ':
-            return first_two, address  # 지역, 주소 반환
-    
-    # 주소가 아닌 경우
     return None, None
 
 # 현장 컬럼에서 지역과 주소 추출 적용
@@ -93,7 +90,7 @@ def extract_and_apply_region(df):
         df_copy['주소'] = [r[1] for r in results]
         
         # 주소가 아닌 값은 현장명으로 설정
-        df_copy['현장명'] = df_copy['현장'].copy()
+        df_copy['현장명'] = np.where(df_copy['주소'].notna(), None, df_copy['현장'])
         mask = df_copy['주소'].notna()
         df_copy.loc[~mask, '현장명'] = df_copy.loc[~mask, '현장']
     return df_copy

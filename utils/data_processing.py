@@ -417,3 +417,10 @@ def preprocess_repair_costs(df):
         st.warning(f"수리비 데이터 전처리 중 오류가 발생했습니다: {e}")
     
     return df_copy
+
+def generate_fault_type_column(df):
+    if all(col in df.columns for col in ['작업유형', '정비대상', '정비작업']):
+        mask = df['작업유형'].notna() & df['정비대상'].notna() & df['정비작업'].notna()
+        df.loc[mask, '고장유형'] = df.loc[mask, ['작업유형', '정비대상', '정비작업']].astype(str).agg('_'.join, axis=1)
+        df['고장유형'] = df['고장유형'].replace('nan_nan_nan', np.nan)
+    return df

@@ -1,4 +1,4 @@
-## 5. pages/02_고장_유형_분석.py
+# pages/02_고장_유형_분석.py
 
 import streamlit as st
 import pandas as pd
@@ -8,26 +8,16 @@ import seaborn as sns
 from utils.visualization import create_figure, get_image_download_link, get_color_theme
 from utils.data_processing import convert_to_str_list
 
-# 페이지 설정
-st.set_page_config(
-    page_title="고장 유형 분석",
-    layout="wide"
-)
+st.set_page_config(page_title="고장 유형 분석", layout="wide")
 
-# 색상 테마 설정
 current_theme = get_color_theme("고장 유형 분석")
-
-# 페이지 제목
 st.title("고장 유형 분석")
 
-# 세션 상태 확인
 if 'df1_with_costs' not in st.session_state:
     st.warning("정비일지 데이터가 로드되지 않았습니다. 홈 화면에서 데이터를 업로드해 주세요.")
     st.stop()
 
-# 데이터 불러오기
 df1 = st.session_state.df1_with_costs
-
 
 def display_fault_analysis(df, maintenance_type=None):
     key_suffix = maintenance_type or "all"
@@ -40,7 +30,6 @@ def display_fault_analysis(df, maintenance_type=None):
         filtered_df = df.copy()
         title_prefix = ""
 
-    # 고장유형 컬럼 생성 및 NaN 제거
     if '고장유형' not in filtered_df.columns and all(col in filtered_df.columns for col in ['작업유형', '정비대상', '정비작업']):
         filtered_df['고장유형'] = filtered_df[['작업유형', '정비대상', '정비작업']].astype(str).agg('_'.join, axis=1)
 
@@ -68,7 +57,7 @@ def display_fault_analysis(df, maintenance_type=None):
             selected_category = st.selectbox(
                 f"{colname} 선택",
                 ["전체"] + category_values,
-                key=f"{unique_prefix}_sel_{colname}"
+                key=f"{unique_prefix}_{tab_name}_sel_{colname}"
             )
 
             tab_filtered_df = filtered_df.copy()
@@ -151,7 +140,7 @@ def display_fault_analysis(df, maintenance_type=None):
                 selected_type = st.selectbox(
                     "분석 항목 선택",
                     model_type_options,
-                    key=f"{unique_prefix}_model_type_selector"
+                    key=f"{unique_prefix}_{tab_name}_model_type_selector"
                 )
 
                 if selected_type:
@@ -180,7 +169,7 @@ def display_fault_analysis(df, maintenance_type=None):
                         selected_value = st.selectbox(
                             selected_type,
                             type_values,
-                            key=f"{unique_prefix}_{selected_type}_value"
+                            key=f"{unique_prefix}_{tab_name}_{selected_type}_value"
                         )
 
                         filtered_df_type = filtered_df if selected_value == "전체" else filtered_df[filtered_df[selected_type] == selected_value]
@@ -214,30 +203,25 @@ def display_fault_analysis(df, maintenance_type=None):
             else:
                 st.warning("고장유형 데이터가 없습니다.")
 
-# 정비구분 컬럼 확인 및 값 검증
+# 정비구분 컬럼 확인
 if '정비구분' in df1.columns and df1['정비구분'].notna().any():
-    # 실제 존재하는 정비구분 값 확인
     maintenance_types = df1['정비구분'].dropna().unique()
     has_internal = '내부' in maintenance_types
     has_external = '외부' in maintenance_types
-    
-    # 탭 생성
+
     tabs = st.tabs(["전체", "내부", "외부"])
-    
-    # 전체 탭
+
     with tabs[0]:
         st.header("전체 고장 유형 분석")
         display_fault_analysis(df1, None)
-    
-    # 내부 탭
+
     with tabs[1]:
         st.header("내부 고장 유형 분석")
         if has_internal:
             display_fault_analysis(df1, "내부")
         else:
             st.info("내부 정비 데이터가 없습니다.")
-    
-    # 외부 탭
+
     with tabs[2]:
         st.header("외부 고장 유형 분석")
         if has_external:
@@ -245,5 +229,4 @@ if '정비구분' in df1.columns and df1['정비구분'].notna().any():
         else:
             st.info("외부 정비 데이터가 없습니다.")
 else:
-    # 정비구분 컬럼이 없는 경우 전체 데이터만
     display_fault_analysis(df1, None)

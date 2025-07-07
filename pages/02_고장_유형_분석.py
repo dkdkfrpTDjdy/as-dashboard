@@ -28,141 +28,118 @@ if 'df1_with_costs' not in st.session_state:
 # 데이터 불러오기
 df1 = st.session_state.df1_with_costs
 
-# 고장 유형 분석 함수 - 내부/외부/전체 탭 추가
 def display_fault_analysis(df, maintenance_type=None):
-    # 필터링 (내부/외부/전체)
     if maintenance_type and maintenance_type != "전체":
-        filtered_df = df[df['정비구분'] == maintenance_type]
+        filtered_df = df[df['정비구분'] == maintenance_type].copy()
         title_prefix = f"{maintenance_type} "
     else:
-        filtered_df = df
+        filtered_df = df.copy()
         title_prefix = ""
 
-    # 필요한 컬럼 존재 여부 확인
-    if all(col in filtered_df.columns for col in ['작업유형', '정비대상', '정비작업']):
-        # 고장유형 컬럼이 없는 경우 생성
-        if '고장유형' not in filtered_df.columns:
-            mask = filtered_df['작업유형'].notna() & filtered_df['정비대상'].notna() & filtered_df['정비작업'].notna()
-            filtered_df.loc[mask, '고장유형'] = (
-                filtered_df.loc[mask, '작업유형'].astype(str) + '_' + 
-                filtered_df.loc[mask, '정비대상'].astype(str) + '_' + 
-                filtered_df.loc[mask, '정비작업'].astype(str)
+    # 고장유형 컬럼 생성 및 NaN 제거
+    if '고장유형' not in filtered_df.columns and all(col in filtered_df.columns for col in ['작업유형', '정비대상', '정비작업']):
+        filtered_df['고장유형'] = filtered_df[['작업유형', '정비대상', '정비작업']].astype(str).agg('_'.join, axis=1)
+    
+    filtered_df['고장유형'].replace('nan_nan_nan', np.nan, inplace=True)
+    filtered_df.dropna(subset=['고장유형'], inplace=True)
+
+    if not all(col in filtered_df.columns for col in ['작업유형', '정비대상', '정비작업']):
+        st.warning("고장 유형 분석에 필요한 컬럼(작업유형, 정비대상, 정비작업)이 누락되었습니다.")
+        return
+
+    category_tabs = {
+        "작업유형": "작업유형",
+        "정비대상": "정비대상",
+        "정비작업": "정비작업"
+    }
+
+    tabs = st.tabs(list(category_tabs.keys()))
+
+    for tab_idx, (tab_name, colname) in enumerate(category_tabs.items()):
+        with tabs[tab_idx]:
+            st.subheader(f"{title_prefix}{colname}")
+
+            category_counts = filtered_df[colname].value_counts().head(15)
+            category_values = sorted([str(v) for v in filtered_df[colname].dropna().unique()])
+            selected_category = st.selectbox(
+                f"{colname} 선택",
+                ["전체"] + category_values,
+                key=f"sel_{colname}_{maintenance_type}"
             )
-        
-        # 탭 구조 정의
-        category_tabs = {
-            "작업유형": "작업유형",
-            "정비대상": "정비대상",
-            "정비작업": "정비작업"
-        }
 
-        # 분석 유형 탭 생성
-        tabs = st.tabs(list(category_tabs.keys()))
+            tab_filtered_df = filtered_df.copy()
+            if selected_category != "전체":
+                tab_filtered_df = tab_filtered_df[tab_filtered_df[colname].astype(str) == selected_category]
 
-        for tab_idx, (tab_name, colname) in enumerate(category_tabs.items()):
-            with tabs[tab_idx]:
-                st.subheader(f"{title_prefix}{colname}")
-                category_counts = filtered_df[colname].value_counts().head(15)
-                category_values = convert_to_str_list(filtered_df[colname].unique())
-                
-                # 선택 상자 생성
-                selected_category = st.selectbox(
-                    f"{colname} 선택", 
-                    ["전체"] + sorted(category_values), 
-                    key=f"sel_{colname}_{maintenance_type}"
-                )
+            if '고장유형' not in tab_filtered_df.columns or '브랜드_모델' not in tab_filtered_df.columns:
+                st.warning("고장유형 또는 브랜드_모델 컬럼이 누락되어 있습니다.")
+                continue
 
-                # 선택에 따라 데이터 필터링
-                if selected_category != "전체":
-                    tab_filtered_df = filtered_df[filtered_df[colname].astype(str) == selected_category]
+            # 히트맵용 필터
+            top_faults = tab_filtered_df['고장유형'].value_counts().nlargest(15).index
+            top_combos = tab_filtered_df['브랜드_모델'].value_counts().nlargest(15).index
+            df_filtered = tab_filtered_df[
+                tab_filtered_df['고장유형'].isin(top_faults) &
+                tab_filtered_df['브랜드_모델'].isin(top_combos)
+            ]
+
+            col1, col2, col3 = st.columns(3)
+
+            # 분포
+            with col1:
+                st.markdown(f"**{colname} 분포**")
+                if not category_counts.empty:
+                    fig1, ax1 = create_figure(figsize=(8, 8), dpi=150)
+                    sns.barplot(x=category_counts.index, y=category_counts.values, ax=ax1, palette=f"{current_theme}_r")
+                    ax1.set_xticklabels(ax1.get_xticklabels(), rotation=45, ha='right')
+                    for i, v in enumerate(category_counts.values):
+                        ax1.text(i, v + max(category_counts.values) * 0.01, str(v), ha='center', fontsize=12)
+                    plt.tight_layout()
+                    st.pyplot(fig1, use_container_width=True)
+                    st.markdown(get_image_download_link(fig1, f'{title_prefix}고장유형_{colname}_분포.png', f'{colname} 분포 다운로드'), unsafe_allow_html=True)
                 else:
-                    tab_filtered_df = filtered_df
-                
-                # 상위 고장 유형 및 브랜드-모델 필터링
-                if '고장유형' in tab_filtered_df.columns and '브랜드_모델' in tab_filtered_df.columns:
-                    top_faults = tab_filtered_df['고장유형'].value_counts().nlargest(15).index
-                    df_filtered = tab_filtered_df[tab_filtered_df['고장유형'].isin(top_faults)]
-                    top_combos = df_filtered['브랜드_모델'].value_counts().nlargest(15).index
-                    df_filtered = df_filtered[df_filtered['브랜드_모델'].isin(top_combos)]
-                
-                    # 3개의 시각화를 나란히 배치
-                    col1, col2, col3 = st.columns(3)
-                
-                    # 1. 분포 막대 그래프
-                    with col1:
-                        st.markdown(f"**{colname} 분포**")
-                        if not category_counts.empty:
-                            fig1, ax1 = create_figure(figsize=(8, 8), dpi=150)
-                            sns.barplot(x=category_counts.index, y=category_counts.values, ax=ax1, palette=f"{current_theme}_r")
-                            plt.xticks(rotation=45, ha='right')
-                            for i, v in enumerate(category_counts.values):
-                                ax1.text(i, v + max(category_counts.values) * 0.01, str(v), ha='center', fontsize=12)
-                            plt.tight_layout()
-                            st.pyplot(fig1, use_container_width=True)
-                            st.markdown(get_image_download_link(fig1, f'{title_prefix}고장유형_{colname}_분포.png', f'{colname} 분포 다운로드'), unsafe_allow_html=True)
-                        else:
-                            st.info(f"선택한 필터에 맞는 {colname} 분포 데이터가 없습니다.")
-                
-                    # 2. 비율 파이 차트
-                    with col2:
-                        st.markdown(f"**{colname}별 비율**")
-                        if not category_counts.empty:
-                            # 5% 미만은 기타로 그룹화
-                            category_counts_ratio = category_counts / category_counts.sum()
-                            small_categories = category_counts_ratio[category_counts_ratio < 0.05]
-                            if not small_categories.empty:
-                                others_sum = small_categories.sum() * category_counts.sum()
-                                category_counts_grouped = category_counts[category_counts_ratio >= 0.05].copy()
-                                category_counts_grouped['기타'] = int(others_sum)
-                            else:
-                                category_counts_grouped = category_counts.copy()
+                    st.info("분포 데이터가 없습니다.")
 
-                            fig2, ax2 = create_figure(figsize=(8, 8), dpi=150)
-                            category_counts_grouped.plot(
-                                kind='pie', 
-                                autopct='%1.1f%%', 
-                                ax=ax2,
-                                colors=sns.color_palette(current_theme, n_colors=len(category_counts_grouped))
-                            )
-                            ax2.set_ylabel('')
-                            plt.tight_layout()
-                            st.pyplot(fig2, use_container_width=True)
-                            st.markdown(get_image_download_link(fig2, f'{title_prefix}고장유형_{colname}_비율.png', f'{colname} 비율 다운로드'), unsafe_allow_html=True)
-                        else:
-                            st.info(f"선택한 필터에 맞는 {colname} 비율 데이터가 없습니다.")
-                
-                    # 3. 히트맵 (고장유형과 브랜드_모델 간의 관계)
-                    with col3:
-                        st.markdown(f"**{colname}에 따른 고장 증상**")
-                        # 히트맵 생성 전 충분한 데이터가 있는지 확인
-                        if len(df_filtered) > 0 and len(top_faults) > 0 and len(top_combos) > 0:
-                            try:
-                                pivot_df = df_filtered.pivot_table(
-                                    index='고장유형',
-                                    columns='브랜드_모델',
-                                    aggfunc='size',
-                                    fill_value=0
-                                )
-                                
-                                # 가독성을 위해 히트맵 크기 제한
-                                if pivot_df.shape[0] > 10 or pivot_df.shape[1] > 10:
-                                    # 가장 빈도가 높은 행과 열만 선택
-                                    row_sums = pivot_df.sum(axis=1).sort_values(ascending=False).head(10).index
-                                    col_sums = pivot_df.sum(axis=0).sort_values(ascending=False).head(10).index
-                                    pivot_df = pivot_df.loc[row_sums, col_sums]
-                                
-                                fig3, ax3 = create_figure(figsize=(8, 8), dpi=150)
-                                sns.heatmap(pivot_df, cmap=current_theme, annot=True, fmt='d', linewidths=0.5, ax=ax3, cbar=False)
-                                plt.xticks(rotation=90)
-                                plt.yticks(rotation=0)
-                                plt.tight_layout()
-                                st.pyplot(fig3, use_container_width=True)
-                                st.markdown(get_image_download_link(fig3, f'{title_prefix}고장유형_{colname}_히트맵.png', f'{colname} 히트맵 다운로드'), unsafe_allow_html=True)
-                            except Exception as e:
-                                st.error(f"히트맵 생성 중 오류: {e}")
-                                st.info("선택한 필터에 맞는 데이터가 충분하지 않을 수 있습니다.")
-                        else:
-                            st.info("히트맵을 생성하기에 충분한 데이터가 없습니다.")
+            # 비율
+            with col2:
+                st.markdown(f"**{colname} 비율**")
+                if not category_counts.empty:
+                    category_counts_ratio = category_counts / category_counts.sum()
+                    small = category_counts_ratio[category_counts_ratio < 0.05]
+                    grouped = category_counts[category_counts_ratio >= 0.05].copy()
+                    if not small.empty:
+                        grouped['기타'] = int(small.sum() * category_counts.sum())
+                    fig2, ax2 = create_figure(figsize=(8, 8), dpi=150)
+                    grouped.plot.pie(
+                        y=None, labels=grouped.index, autopct='%1.1f%%', ax=ax2,
+                        colors=sns.color_palette(current_theme, n_colors=len(grouped))
+                    )
+                    ax2.set_ylabel('')
+                    plt.tight_layout()
+                    st.pyplot(fig2, use_container_width=True)
+                    st.markdown(get_image_download_link(fig2, f'{title_prefix}고장유형_{colname}_비율.png', f'{colname} 비율 다운로드'), unsafe_allow_html=True)
+                else:
+                    st.info("비율 데이터가 없습니다.")
+
+            # 히트맵
+            with col3:
+                st.markdown(f"**{colname}에 따른 고장 증상**")
+                if len(df_filtered) > 0:
+                    pivot_df = df_filtered.pivot_table(index='고장유형', columns='브랜드_모델', aggfunc='size', fill_value=0)
+                    if pivot_df.shape[0] > 10 or pivot_df.shape[1] > 10:
+                        row_sums = pivot_df.sum(axis=1).nlargest(10).index
+                        col_sums = pivot_df.sum(axis=0).nlargest(10).index
+                        pivot_df = pivot_df.loc[row_sums, col_sums]
+
+                    fig3, ax3 = create_figure(figsize=(8, 8), dpi=150)
+                    sns.heatmap(pivot_df, cmap=current_theme, annot=True, fmt='d', linewidths=0.5, ax=ax3, cbar=False)
+                    plt.xticks(rotation=90)
+                    plt.yticks(rotation=0)
+                    plt.tight_layout()
+                    st.pyplot(fig3, use_container_width=True)
+                    st.markdown(get_image_download_link(fig3, f'{title_prefix}고장유형_{colname}_히트맵.png', f'{colname} 히트맵 다운로드'), unsafe_allow_html=True)
+                else:
+                    st.info("히트맵을 생성할 데이터가 충분하지 않습니다.")
         
         # 자재내역 분석 섹션 추가
         with st.expander("장비 특성별 분석", expanded=True):
@@ -175,7 +152,11 @@ def display_fault_analysis(df, maintenance_type=None):
                     model_type_options.append(col_name)
             
             if model_type_options:
-                selected_type = st.selectbox("분석 항목 선택", model_type_options)
+                selected_type = st.selectbox(
+                    "분석 항목 선택",
+                    model_type_options,
+                    key=f"model_type_selector_{maintenance_type or '전체'}"
+                )
                 
                 if selected_type:
                     col1, col2 = st.columns(2)

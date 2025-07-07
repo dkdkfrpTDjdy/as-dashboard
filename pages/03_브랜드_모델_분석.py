@@ -398,7 +398,7 @@ if '브랜드' in df1.columns:
                                              
                             # 간결한 값 표시
                             for i, v in enumerate(year_avg_days.values):
-                                ax.text(i, v + 0.02, f"{v:.1f}일", ha='center', fontsize=7)
+                                ax.text(i, v + 0.1, f"{v:.1f}", ha='center', fontsize=7)
                                 
                             plt.xticks(rotation=45)
                             ax.set_ylabel('평균 처리일수')
@@ -421,7 +421,7 @@ if '브랜드' in df1.columns:
                                              
                             # 간결한 값 표시
                             for i, v in enumerate(year_avg_interval.values):
-                                ax.text(i, v + 0.02, f"{v:.1f}", ha='center', fontsize=7)
+                                ax.text(i, v + 0.1, f"{v:.1f}", ha='center', fontsize=7)
                                 
                             plt.xticks(rotation=45)
                             ax.set_ylabel('평균 재정비간격 (일)')

@@ -79,23 +79,17 @@ def extract_region_from_address(address):
 
     return None, None
 
-# 현장 컬럼에서 지역과 주소 추출 적용
 @st.cache_data
 def extract_and_apply_region(df):
     """현장 컬럼에서 지역과 주소를 추출하여 적용하는 함수"""
     df_copy = df.copy()
+    
     if '현장' in df_copy.columns:
-        # 지역과 주소 추출
         results = df_copy['현장'].apply(extract_region_from_address)
-        
-        # 결과에서 지역과 주소 분리
-        df_copy['지역'] = [r[0] for r in results]
-        df_copy['주소'] = [r[1] for r in results]
-        
-        # 주소가 아닌 값은 현장명으로 설정
-        df_copy['현장명'] = np.where(df_copy['주소'].notna(), None, df_copy['현장'])
-        mask = df_copy['주소'].notna()
-        df_copy.loc[~mask, '현장명'] = df_copy.loc[~mask, '현장']
+        df_copy['지역'] = results.map(lambda x: x[0])
+        df_copy['주소'] = results.map(lambda x: x[1])
+        df_copy['현장명'] = np.where(df_copy['주소'].isna(), df_copy['현장'], None)
+    
     return df_copy
 
 # 문자열 리스트 변환

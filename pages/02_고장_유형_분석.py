@@ -64,7 +64,7 @@ def display_fault_analysis(df, maintenance_type=None):
             selected_category = st.selectbox(
                 f"{colname} 선택",
                 ["전체"] + category_values,
-                key=f"sel_{colname}_{maintenance_type}"
+                key=f"sel_{colname}_{key_suffix}"
             )
 
             tab_filtered_df = filtered_df.copy()
@@ -152,10 +152,11 @@ def display_fault_analysis(df, maintenance_type=None):
                     model_type_options.append(col_name)
             
             if model_type_options:
+                key_suffix = maintenance_type if maintenance_type else "all"
                 selected_type = st.selectbox(
                     "분석 항목 선택",
                     model_type_options,
-                    key=f"model_type_selector_{maintenance_type or '전체'}"
+                    key=f"model_type_selector_{key_suffix}"
                 )
                 
                 if selected_type:

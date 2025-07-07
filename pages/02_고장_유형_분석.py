@@ -140,7 +140,7 @@ def display_fault_analysis(df, maintenance_type=None):
                 selected_type = st.selectbox(
                     "분석 항목 선택",
                     model_type_options,
-                    key=f"{unique_prefix}_{tab_name}_model_type_selector"
+                    key=f"{unique_prefix}_model_type_selector"
                 )
 
                 if selected_type:

@@ -96,177 +96,66 @@ def display_integrated_dashboard(df, category_name, key_prefix):
 
     st.markdown("---")
     
-    # 분석 섹션 선택기 (확장 가능한 섹션으로 분리)
     sections = st.multiselect(
         "표시할 분석 섹션 선택",
-        ["월별 분석", "지역별 분석", "소속별 분석", "수리비 상세 분석"],
-        default=["월별 분석", "지역별 분석"],  # "소속별 분석" 제거하여 기본값에서 제외
+        ["기본 분석", "소속별 분석", "수리비 상세 분석"],
+        default=["기본 분석"],
         key=f"{key_prefix}_sections"
     )
     
-    # 1. 월별 분석
-    if "월별 분석" in sections:
-        with st.expander("월별 분석", expanded=True):
+    # 1. 기본 분석 (월별 + 지역별)
+    if "기본 분석" in sections:
+        with st.expander("기본 분석", expanded=True):
             if '정비일자' in df.columns:
-                col1, col2, col3 = st.columns(3)
-                
+                df_time = df.copy()
+
+                # 정비일자 변환
+                if not pd.api.types.is_datetime64_any_dtype(df_time['정비일자']):
+                    df_time['정비일자'] = pd.to_datetime(df_time['정비일자'], errors='coerce')
+
+                df_time['월'] = df_time['정비일자'].dt.to_period('M')
+                df_time['월'] = df_time['월'].astype(str)
+
+                # 월별 건수
+                monthly_counts = df_time.groupby('월').size().reset_index(name='건수')
+
+                # 지역별 건수
+                region_counts = df.copy()
+                region_counts = region_counts.dropna(subset=['지역'])
+                region_counts = region_counts['지역'].value_counts()
+                others = region_counts[region_counts < 3].sum()
+                region_counts = region_counts[region_counts >= 3]
+                if others > 0:
+                    region_counts['기타'] = others
+                region_counts = region_counts.sort_values(ascending=False).nlargest(15)
+
+                col1, col2 = st.columns(2)
+
                 with col1:
-                    # 월별 AS 건수
                     st.subheader("월별 AS 건수")
-                    
-                    # 데이터 준비
-                    df_time = df.copy()
-                    
-                    # datetime 형식 확인 및 변환
-                    if not pd.api.types.is_datetime64_any_dtype(df_time['정비일자']):
-                        try:
-                            df_time['정비일자'] = pd.to_datetime(df_time['정비일자'], errors='coerce')
-                        except Exception as e:
-                            st.error(f"'정비일자' 컬럼을 datetime으로 변환하는 데 실패했습니다: {e}")
-                            st.stop()
-                    
-                    # 이전에 작동했던 방식으로 월 추출
-                    df_time['월'] = df_time['정비일자'].dt.to_period('M')
-                    monthly_counts = df_time.groupby('월').size().reset_index(name='건수')
-                    monthly_counts['월'] = monthly_counts['월'].astype(str)
-                    
-                    # 그래프 생성
-                    fig, ax = create_figure(figsize=(10, 6), dpi=150)
-                    sns.barplot(x='월', y='건수', data=monthly_counts, ax=ax, palette='Blues')
-                    
-                    # 막대 위에 텍스트 표시
+                    fig1, ax1 = create_figure(figsize=(10, 6), dpi=150)
+                    sns.barplot(x='월', y='건수', data=monthly_counts, ax=ax1, palette='Blues')
                     for i, v in enumerate(monthly_counts['건수']):
-                        ax.text(i, v + max(monthly_counts['건수']) * 0.01, str(v), ha='center')
-                        
+                        ax1.text(i, v + max(monthly_counts['건수']) * 0.01, str(v), ha='center')
                     plt.xticks(rotation=45)
-                    ax.set_ylabel('건수')
+                    ax1.set_ylabel('건수')
                     plt.tight_layout()
-                    
-                    st.pyplot(fig, use_container_width=True)
-                    st.markdown(get_image_download_link(fig, f'{category_name}_월별_AS_건수.png', '월별 AS 건수 다운로드'), unsafe_allow_html=True)
-                
+                    st.pyplot(fig1, use_container_width=True)
+                    st.markdown(get_image_download_link(fig1, f'{category_name}_월별_AS_건수.png', '월별 AS 건수 다운로드'), unsafe_allow_html=True)
+
                 with col2:
-                    # 가동시간 또는 수리비 선택
-                    chart_option = st.radio(
-                        "차트 선택", 
-                        ["월별 평균 가동시간", "월별 평균 수리비"],
-                        key=f"{key_prefix}_chart_option"
-                    )
-                    
-                    if chart_option == "월별 평균 가동시간" and operation_col in df.columns:
-                        st.subheader("월별 평균 가동시간")
-                        
-                        # 데이터 준비
-                        df_op = df.copy()
-                        df_op['월'] = df_op['정비일자'].dt.to_period('M')
-                        monthly_avg = df_op.groupby('월')[operation_col].mean().reset_index()
-                        monthly_avg['월'] = monthly_avg['월'].astype(str)
-                        
-                        # 그래프 생성
-                        fig, ax = create_figure(figsize=(10, 6), dpi=150)
-                        sns.barplot(data=monthly_avg, x='월', y=operation_col, ax=ax, palette="Blues")
-                        
-                        # 평균값 텍스트 표시
-                        for index, row in monthly_avg.iterrows():
-                            ax.text(index, row[operation_col] + 0.2, f"{row[operation_col]:.1f}시간", ha='center')
-                        
-                        plt.xticks(rotation=45)
-                        plt.tight_layout()
-                        
-                        st.pyplot(fig, use_container_width=True)
-                        st.markdown(get_image_download_link(fig, f'{category_name}_월별_평균_가동시간.png', '월별 평균 가동시간 다운로드'), unsafe_allow_html=True)
-                    
-                    elif chart_option == "월별 평균 수리비" and '수리비' in df.columns:
-                        st.subheader("월별 평균 수리비")
-                        
-                        # 데이터 준비
-                        df_cost = df.copy()
-                        df_cost['월'] = df_cost['정비일자'].dt.to_period('M')
-                        monthly_cost_avg = df_cost.groupby('월')['수리비'].mean().reset_index()
-                        monthly_cost_avg['월'] = monthly_cost_avg['월'].astype(str)
-                        
-                        # 그래프 생성
-                        fig, ax = create_figure(figsize=(10, 6), dpi=150)
-                        sns.barplot(x='월', y='수리비', data=monthly_cost_avg, ax=ax, palette="Blues")
-                        
-                        # 평균값 텍스트 표시
-                        for i, v in enumerate(monthly_cost_avg['수리비']):
-                            ax.text(i, v + max(monthly_cost_avg['수리비']) * 0.01, f"{v:,.0f}원", ha='center', fontsize=8)
-                        
-                        plt.xticks(rotation=45)
-                        ax.set_ylabel('평균 수리비 (원)')
-                        plt.tight_layout()
-                        
-                        st.pyplot(fig, use_container_width=True)
-                        st.markdown(get_image_download_link(fig, f'{category_name}_월별_평균_수리비.png', '월별 평균 수리비 다운로드'), unsafe_allow_html=True)
-                
-                with col3:
-                    # 수리시간 분포
-                    if repair_col in df.columns:
-                        st.subheader("수리시간 분포")
-                        
-                        # 데이터 준비
-                        bins = [0, 2, 4, 8, 12, 24, float('inf')]
-                        labels = ['0-2시간', '2-4시간', '4-8시간', '8-12시간', '12-24시간', '24시간 이상']
-                        df_repair = df.copy()
-                        df_repair['수리시간_구간'] = pd.cut(df_repair[repair_col], bins=bins, labels=labels)
-                        repair_time_counts = df_repair['수리시간_구간'].value_counts().sort_index()
-                        
-                        # 그래프 생성
-                        fig, ax = create_figure(figsize=(10, 6), dpi=150)
-                        sns.barplot(x=repair_time_counts.index, y=repair_time_counts.values, ax=ax, palette="Blues")
-                        
-                        # 막대 위에 텍스트 표시
-                        for i, v in enumerate(repair_time_counts.values):
-                            ax.text(i, v + max(repair_time_counts.values) * 0.02, str(v), ha='center', fontsize=10)
-                        
-                        plt.xticks(rotation=45)
-                        plt.tight_layout()
-                        st.pyplot(fig, use_container_width=True)
-                        st.markdown(get_image_download_link(fig, f'{category_name}_수리시간_분포.png', '수리시간 분포 다운로드'), unsafe_allow_html=True)
-            else:
-                st.warning("정비일자 컬럼이 없어 월별 분석을 수행할 수 없습니다.")
-    
-    # 2. 지역별 분석
-    if "지역별 분석" in sections:
-        with st.expander("지역별 분석", expanded=True):
-            # 지역별 빈도 분석
-            st.subheader("지역별 AS 건수")
-            if '지역' in df.columns:
-                df_clean = df.dropna(subset=['지역']).copy()
-                
-                # 없으면 건너뛰기
-                if len(df_clean) == 0:
-                    st.warning("지역 정보가 없습니다.")
-                else:
-                    region_counts = df_clean['지역'].value_counts()
-                    
-                    # 최소 빈도수 처리 및 상위 15개 표시
-                    others_count = region_counts[region_counts < 3].sum()
-                    region_counts = region_counts[region_counts >= 3]
-                    if others_count > 0:
-                        region_counts['기타'] = others_count
-                    
-                    region_counts = region_counts.sort_values(ascending=False).nlargest(15)
-                    
-                    # 시각화
-                    fig, ax = create_figure(figsize=(10, 8), dpi=150)
-                    blue_palette = sns.color_palette("Blues", n_colors=len(region_counts))
-                    
-                    sns.barplot(x=region_counts.index, y=region_counts.values, ax=ax, palette=blue_palette)
-                    
-                    # 막대 위에 텍스트 표시
+                    st.subheader("지역별 AS 건수")
+                    fig2, ax2 = create_figure(figsize=(10, 6), dpi=150)
+                    sns.barplot(x=region_counts.index, y=region_counts.values, ax=ax2, palette="Blues")
                     for i, v in enumerate(region_counts.values):
-                        ax.text(i, v + max(region_counts.values) * 0.02, str(v), ha='center', fontsize=10)
-                    
-                    plt.tight_layout()
+                        ax2.text(i, v + max(region_counts.values) * 0.02, str(v), ha='center', fontsize=10)
                     plt.xticks(rotation=45)
-                    st.pyplot(fig, use_container_width=True)
-                    
-                    # 다운로드 링크 추가
-                    st.markdown(get_image_download_link(fig, f'{category_name}_지역별_AS_현황.png', '지역별 AS 현황 다운로드'), unsafe_allow_html=True)
+                    ax2.set_ylabel('건수')
+                    plt.tight_layout()
+                    st.pyplot(fig2, use_container_width=True)
+                    st.markdown(get_image_download_link(fig2, f'{category_name}_지역별_AS_건수.png', '지역별 AS 건수 다운로드'), unsafe_allow_html=True)
             else:
-                st.warning("지역 정보가 없습니다.")
+                st.warning("정비일자 컬럼이 없어 기본 분석을 수행할 수 없습니다.")
     
     # 3. 소속별 분석
     if "소속별 분석" in sections:

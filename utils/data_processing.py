@@ -322,12 +322,6 @@ def merge_repair_costs(maintenance_df, parts_df):
                 st.warning(f"소모품 데이터에 '{col}' 컬럼이 없습니다.")
                 return maintenance_df
 
-        # 디버깅: 데이터 형식 확인
-        print("정비일지 관리번호 샘플:", df1['관리번호'].head().tolist())
-        print("수리비 관리번호 샘플:", df3['관리번호'].head().tolist())
-        print("정비자번호 샘플:", df1['정비자번호'].head().tolist())
-        print("출고자 샘플:", df3['출고자'].head().tolist())
-
         # 관리번호를 문자열로 변환 (숫자 형식 방지)
         df1['관리번호'] = df1['관리번호'].astype(str)
         df3['관리번호'] = df3['관리번호'].astype(str)
@@ -346,10 +340,6 @@ def merge_repair_costs(maintenance_df, parts_df):
         df1['정비일자'] = pd.to_datetime(df1['정비일자'], errors='coerce')
         df3['출고일자'] = pd.to_datetime(df3['출고일자'], errors='coerce')
         
-        # 디버깅: 변환 후 데이터 확인
-        print("변환 후 정비일지 관리번호 샘플:", df1['관리번호'].head().tolist())
-        print("변환 후 수리비 관리번호 샘플:", df3['관리번호'].head().tolist())
-        
         # 기존 수리비 컬럼 제거 (있는 경우)
         if '수리비' in df1.columns:
             df1 = df1.drop('수리비', axis=1)
@@ -360,55 +350,64 @@ def merge_repair_costs(maintenance_df, parts_df):
 
         # 결과 데이터프레임 초기화
         result_df = df1.copy()
-        result_df['수리비'] = 0
-        result_df['사용부품'] = ""
-
-        # 매칭 카운터 초기화
-        match_count = 0
-        total_count = len(result_df)
         
-        # 각 정비 건에 대해 매칭되는 수리비 찾기
-        for idx, row in result_df.iterrows():
-            # 필수 값 확인
-            if pd.isna(row['정비일자']) or pd.isna(row['관리번호']) or pd.isna(row['정비자번호']):
-                continue
-                
-            # 관리번호 매칭
-            matching_parts = df3[df3['관리번호'] == row['관리번호']]
-            
-            if len(matching_parts) == 0:
-                continue
-                
-            # 정비자번호와 출고자 매칭
-            matching_parts = matching_parts[matching_parts['출고자'] == row['정비자번호']]
-            
-            if len(matching_parts) == 0:
-                continue
-                
-            # 날짜 범위 매칭 (±30일)
-            date_min = row['정비일자'] - pd.Timedelta(days=30)
-            date_max = row['정비일자'] + pd.Timedelta(days=30)
-            
-            matching_parts = matching_parts[
-                (matching_parts['출고일자'] >= date_min) & 
-                (matching_parts['출고일자'] <= date_max)
-            ]
-            
-            # 매칭된 수리비 합계 및 사용부품 목록 계산
-            if len(matching_parts) > 0:
-                match_count += 1
-                total_cost = matching_parts['출고금액'].sum()
-                parts_list = ', '.join(matching_parts['자재명'].dropna().unique())
-                
-                result_df.at[idx, '수리비'] = total_cost
-                result_df.at[idx, '사용부품'] = parts_list
-
-        # 매칭 결과 출력
-        print(f"총 {total_count}개 중 {match_count}개 매칭됨 ({match_count/total_count*100:.1f}%)")
+        # 벡터화된 방식으로 매칭 수행
+        # 1. 정비일지와 수리비 데이터를 관리번호와 정비자번호/출고자로 조인
+        merged = pd.merge(
+            df1[['관리번호', '정비일자', '정비자번호']],
+            df3[['관리번호', '출고일자', '출고자', '출고금액', '자재명']],
+            left_on=['관리번호', '정비자번호'],
+            right_on=['관리번호', '출고자'],
+            how='inner'  # 매칭되는 데이터만 유지
+        )
         
-        # 매칭된 관리번호 목록 출력 (디버깅용)
-        matched_ids = result_df.loc[result_df['수리비'] > 0, '관리번호'].unique()
-        print(f"매칭된 관리번호 샘플 (최대 10개): {matched_ids[:10].tolist()}")
+        # 2. 날짜 차이 계산 및 ±30일 이내 필터링
+        merged['일자차이'] = (merged['출고일자'] - merged['정비일자']).dt.days
+        merged = merged[merged['일자차이'].abs() <= 30]
+        
+        # 3. 정비일지 인덱스 추가 (나중에 그룹화할 때 사용)
+        # 원본 df1의 인덱스를 사용하여 매핑 테이블 생성
+        index_map = pd.Series(df1.index, index=pd.MultiIndex.from_frame(df1[['관리번호', '정비일자', '정비자번호']]))
+        
+        # 매핑 테이블을 사용하여 merged에 원본 인덱스 추가
+        merged['원본인덱스'] = merged.apply(
+            lambda row: index_map.get((row['관리번호'], row['정비일자'], row['정비자번호']), None), 
+            axis=1
+        )
+        
+        # 4. 원본인덱스별로 그룹화하여 수리비 합계 및 사용부품 목록 계산
+        if not merged.empty:
+            # 수리비 합계 계산
+            cost_summary = merged.groupby('원본인덱스')['출고금액'].sum().reset_index()
+            cost_summary.columns = ['원본인덱스', '수리비']
+            
+            # 사용부품 목록 계산
+            parts_summary = merged.groupby('원본인덱스')['자재명'].apply(
+                lambda x: ', '.join(x.dropna().unique())
+            ).reset_index()
+            parts_summary.columns = ['원본인덱스', '사용부품']
+            
+            # 결과 데이터프레임에 수리비와 사용부품 추가
+            result_df['수리비'] = 0
+            result_df['사용부품'] = ""
+            
+            # 인덱스 기반으로 값 설정
+            for _, row in cost_summary.iterrows():
+                result_df.at[row['원본인덱스'], '수리비'] = row['수리비']
+            
+            for _, row in parts_summary.iterrows():
+                result_df.at[row['원본인덱스'], '사용부품'] = row['사용부품']
+            
+            # 매칭 결과 출력
+            match_count = (result_df['수리비'] > 0).sum()
+            total_count = len(result_df)
+            match_rate = match_count / total_count * 100 if total_count > 0 else 0
+            print(f"총 {total_count}개 중 {match_count}개 매칭됨 ({match_rate:.1f}%)")
+        else:
+            # 매칭된 데이터가 없는 경우
+            result_df['수리비'] = 0
+            result_df['사용부품'] = ""
+            print("매칭된 데이터가 없습니다.")
 
         return result_df
 

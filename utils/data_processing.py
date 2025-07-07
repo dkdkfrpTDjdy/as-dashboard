@@ -60,21 +60,22 @@ def load_data(file):
         return None
 
 def extract_region_from_address(address):
-    """주소에서 지역 정보를 추출하는 함수 - 정밀 개선 버전"""
+    """주소에서 지역 정보를 정밀하게 추출하는 함수"""
     if not isinstance(address, str):
         return None, None
 
     region_prefixes = ['서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종',
                        '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주']
 
-    # 지역 + 공백 + (시|군|구) + 공백 이상의 구조인 경우만 주소로 간주
     for prefix in region_prefixes:
         if address.startswith(prefix):
-            # 패턴 예: 서울 강남구 / 경기 수원시 권선구
-            if re.match(rf'^{prefix}\s+\S{{2,9}}(시|군|구)', address):
+            # 최소: '인천 중구 항동', '경기 수원시 권선구' 등
+            parts = address.split()
+            if len(parts) >= 3 and (parts[1].endswith('시') or parts[1].endswith('군') or parts[1].endswith('구')):
                 return prefix, address
 
     return None, None
+
 
 # 현장 컬럼에서 지역과 주소 추출 적용
 @st.cache_data

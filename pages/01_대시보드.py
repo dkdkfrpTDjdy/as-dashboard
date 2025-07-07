@@ -191,39 +191,49 @@ def display_integrated_dashboard(df, category_name, key_prefix):
             # 두 번째 줄: 월별 평균 지표와 수리시간 분포
             col3, col4 = st.columns(2)
             
-            with col3:
-                # 월별 평균 지표
-                st.subheader("월별 평균 지표")
-                if '정비일자' in df.columns:
-                    # 가동시간 또는 수리비 선택
-                    chart_option = st.radio(
-                        "차트 선택", 
-                        ["월별 평균 가동시간", "월별 평균 수리비"],
-                        key=f"{key_prefix}_chart_option"
-                    )
+        with col3:
+            # 월별 평균 지표
+            st.subheader("월별 평균 지표")
+            if '정비일자' in df.columns:
+                # 기본 차트 옵션 설정 (초기 표시할 차트)
+                default_chart = "월별 평균 가동시간"
+                
+                # 먼저 기본 차트 표시
+                if default_chart == "월별 평균 가동시간" and operation_col in df.columns:
+                    # 데이터 준비
+                    df_op = df.copy()
+                    df_op['월'] = df_op['정비일자'].dt.to_period('M')
+                    monthly_avg = df_op.groupby('월')[operation_col].mean().reset_index()
+                    monthly_avg['월'] = monthly_avg['월'].astype(str)
                     
-                    if chart_option == "월별 평균 가동시간" and operation_col in df.columns:
-                        # 데이터 준비
-                        df_op = df.copy()
-                        df_op['월'] = df_op['정비일자'].dt.to_period('M')
-                        monthly_avg = df_op.groupby('월')[operation_col].mean().reset_index()
-                        monthly_avg['월'] = monthly_avg['월'].astype(str)
-                        
-                        # 그래프 생성
-                        fig, ax = create_figure(figsize=(10, 6), dpi=150)
-                        sns.barplot(data=monthly_avg, x='월', y=operation_col, ax=ax, palette="Blues")
-                        
-                        # 평균값 텍스트 표시
-                        for index, row in monthly_avg.iterrows():
-                            ax.text(index, row[operation_col] + 0.2, f"{row[operation_col]:.1f}시간", ha='center')
-                        
-                        plt.xticks(rotation=45)
-                        plt.tight_layout()
-                        
-                        st.pyplot(fig, use_container_width=True)
-                        st.markdown(get_image_download_link(fig, f'{category_name}_월별_평균_가동시간.png', '월별 평균 가동시간 다운로드'), unsafe_allow_html=True)
+                    # 그래프 생성
+                    fig, ax = create_figure(figsize=(10, 6), dpi=150)
+                    sns.barplot(data=monthly_avg, x='월', y=operation_col, ax=ax, palette="Blues")
                     
-                    elif chart_option == "월별 평균 수리비" and '수리비' in df.columns:
+                    # 평균값 텍스트 표시
+                    for index, row in monthly_avg.iterrows():
+                        ax.text(index, row[operation_col] + 0.2, f"{row[operation_col]:.1f}시간", ha='center')
+                    
+                    plt.xticks(rotation=45)
+                    plt.tight_layout()
+                    
+                    st.pyplot(fig, use_container_width=True)
+                    st.markdown(get_image_download_link(fig, f'{category_name}_월별_평균_가동시간.png', '월별 평균 가동시간 다운로드'), unsafe_allow_html=True)
+                else:
+                    if operation_col not in df.columns:
+                        st.warning("가동시간 데이터가 없습니다.")
+                
+                # 차트 선택 라디오 버튼을 그래프 아래에 배치
+                chart_option = st.radio(
+                    "차트 선택", 
+                    ["월별 평균 가동시간", "월별 평균 수리비"],
+                    key=f"{key_prefix}_chart_option",
+                    horizontal=True  # 수평으로 배치하여 공간 절약
+                )
+                
+                # 선택된 차트가 기본 차트와 다를 경우에만 다시 그리기
+                if chart_option != default_chart:
+                    if chart_option == "월별 평균 수리비" and '수리비' in df.columns:
                         # 데이터 준비
                         df_cost = df.copy()
                         df_cost['월'] = df_cost['정비일자'].dt.to_period('M')
@@ -244,13 +254,16 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         
                         st.pyplot(fig, use_container_width=True)
                         st.markdown(get_image_download_link(fig, f'{category_name}_월별_평균_수리비.png', '월별 평균 수리비 다운로드'), unsafe_allow_html=True)
+                    elif chart_option == "월별 평균 가동시간" and operation_col in df.columns:
+                        # 이미 위에서 표시했으므로 여기서는 아무 작업도 하지 않음
+                        pass
                     else:
                         if chart_option == "월별 평균 가동시간":
                             st.warning("가동시간 데이터가 없습니다.")
                         else:
                             st.warning("수리비 데이터가 없습니다.")
-                else:
-                    st.warning("정비일자 컬럼이 없어 월별 분석을 수행할 수 없습니다.")
+            else:
+                st.warning("정비일자 컬럼이 없어 월별 분석을 수행할 수 없습니다.")
             
             with col4:
                 # 수리시간 분포

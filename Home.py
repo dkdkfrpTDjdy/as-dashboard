@@ -1,7 +1,6 @@
-## 3. Home.py (메인 페이지)
-
 import streamlit as st
 import pandas as pd
+import numpy as np
 from utils.data_processing import load_data, merge_dataframes, extract_and_apply_region
 from utils.data_processing import calculate_previous_maintenance_dates, map_employee_data, merge_repair_costs
 from utils.data_processing import process_date_columns, preprocess_repair_costs
@@ -69,72 +68,175 @@ if df4 is not None:
     st.sidebar.success("조직도 데이터 로드 완료")
     st.sidebar.info(f"조직도 데이터 크기: {df4.shape}")
 
-# 세션 상태 확인 (디버깅용)
-st.sidebar.write("세션 상태에 있는 키:", list(st.session_state.keys()))
-
 # 메인 제목
 st.title("산업장비 AS 분석 대시보드")
 
+# 정비일지 데이터 전처리 함수 추가
+def preprocess_maintenance_data(df):
+    """정비일지 데이터 전처리 함수"""
+    try:
+        # 컬럼명 정리 (줄바꿈, 공백 제거)
+        df.columns = [str(col).strip().replace('\n', '') for col in df.columns]
+        
+        # 정비구분 컬럼 전처리
+        if '정비구분' in df.columns:
+            df['정비구분'] = df['정비구분'].astype(str).apply(lambda x: x.strip().replace('\n', '') if not pd.isna(x) else x)
+            # 'nan' 문자열을 실제 NaN으로 변환
+            df.loc[df['정비구분'] == 'nan', '정비구분'] = np.nan
+            
+            # 내부/외부 값 표준화 (대소문자 구분 없이)
+            def standardize_maintenance_type(value):
+                if pd.isna(value):
+                    return value
+                value_lower = str(value).lower()
+                if '내부' in value_lower:
+                    return '내부'
+                elif '외부' in value_lower:
+                    return '외부'
+                return value
+            
+            df['정비구분'] = df['정비구분'].apply(standardize_maintenance_type)
+        
+        # 수치형 데이터 처리
+        numeric_columns = ['가동시간', '수리시간', '수리비']
+        for col in numeric_columns:
+            if col in df.columns:
+                # 숫자가 아닌 값을 NaN으로 변환
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+        return df
+    
+    except Exception as e:
+        st.error(f"정비일지 데이터 전처리 중 오류 발생: {e}")
+        return df
+
 # 사용자 업로드 파일 처리
 if uploaded_file1 is not None:
-    # 정비일지 데이터 로드
-    df1 = load_data(uploaded_file1)
-    
-    if df1 is not None:
-        st.session_state.df1 = df1
-        st.session_state.file_name1 = uploaded_file1.name
+    try:
+        # 정비일지 데이터 로드
+        df1 = load_data(uploaded_file1)
         
-        # 자산 데이터와 병합
-        if df2 is not None:
-            df1 = merge_dataframes(df1, df2)
+        if df1 is not None:
+            # 기본 전처리 적용
+            df1 = preprocess_maintenance_data(df1)
             
-        # 최근 정비일자 계산
-        df1 = calculate_previous_maintenance_dates(df1)
-        
-        # 현장 컬럼에서 지역 정보 추출
-        df1 = extract_and_apply_region(df1)
-        
-        # 날짜 처리 및 재정비 간격 계산
-        df1 = process_date_columns(df1)
-        
-        # 조직도 데이터 매핑
-        if df4 is not None:
-            df1 = map_employee_data(df1, df4)
-        
-        st.session_state.df1_processed = df1
-        st.success(f"정비일지 데이터가 성공적으로 로드되었습니다. (총 {len(df1)}개 레코드)")
+            st.session_state.df1 = df1
+            st.session_state.file_name1 = uploaded_file1.name
+            
+            # 자산 데이터와 병합
+            if df2 is not None:
+                try:
+                    df1 = merge_dataframes(df1, df2)
+                except Exception as e:
+                    st.warning(f"자산 데이터 병합 중 오류 발생: {e}")
+            
+            # 최근 정비일자 계산
+            try:
+                df1 = calculate_previous_maintenance_dates(df1)
+            except Exception as e:
+                st.warning(f"정비일자 계산 중 오류 발생: {e}")
+            
+            # 현장 컬럼에서 지역 정보 추출
+            try:
+                df1 = extract_and_apply_region(df1)
+            except Exception as e:
+                st.warning(f"지역 정보 추출 중 오류 발생: {e}")
+            
+            # 날짜 처리 및 재정비 간격 계산
+            try:
+                df1 = process_date_columns(df1)
+            except Exception as e:
+                st.warning(f"날짜 처리 중 오류 발생: {e}")
+            
+            # 조직도 데이터 매핑
+            if df4 is not None:
+                try:
+                    df1 = map_employee_data(df1, df4)
+                except Exception as e:
+                    st.warning(f"조직도 데이터 매핑 중 오류 발생: {e}")
+            
+            st.session_state.df1_processed = df1
+            st.success(f"정비일지 데이터가 성공적으로 로드되었습니다. (총 {len(df1)}개 레코드)")
+    
+    except Exception as e:
+        st.error(f"정비일지 데이터 처리 중 오류 발생: {e}")
 
 if uploaded_file3 is not None:
-    # 수리비 데이터 로드
-    df3 = load_data(uploaded_file3)
+    try:
+        # 수리비 데이터 로드
+        df3 = load_data(uploaded_file3)
+        
+        if df3 is not None:
+            # 컬럼명 정리
+            df3.columns = [str(col).strip().replace('\n', '') for col in df3.columns]
+            
+            st.session_state.df3 = df3
+            st.session_state.file_name3 = uploaded_file3.name
+            
+            # 수리비 데이터 전처리
+            try:
+                df3 = preprocess_repair_costs(df3)
+            except Exception as e:
+                st.warning(f"수리비 데이터 전처리 중 오류 발생: {e}")
+            
+            # 조직도 데이터 매핑
+            if df4 is not None:
+                try:
+                    df3 = map_employee_data(df3, df4)
+                except Exception as e:
+                    st.warning(f"조직도 데이터 매핑 중 오류 발생: {e}")
+            
+            st.session_state.df3_processed = df3
+            st.success(f"수리비 데이터가 성공적으로 로드되었습니다. (총 {len(df3)}개 레코드)")
     
-    if df3 is not None:
-        st.session_state.df3 = df3
-        st.session_state.file_name3 = uploaded_file3.name
-        
-        # 수리비 데이터 전처리
-        df3 = preprocess_repair_costs(df3)
-        
-        # 조직도 데이터 매핑
-        if df4 is not None:
-            df3 = map_employee_data(df3, df4)
-        
-        st.session_state.df3_processed = df3
-        st.success(f"수리비 데이터가 성공적으로 로드되었습니다. (총 {len(df3)}개 레코드)")
+    except Exception as e:
+        st.error(f"수리비 데이터 처리 중 오류 발생: {e}")
 
 # 정비일지와 수리비 데이터 병합
 if 'df1_processed' in st.session_state and 'df3_processed' in st.session_state:
-    df1 = st.session_state.df1_processed
-    df3 = st.session_state.df3_processed
+    try:
+        df1 = st.session_state.df1_processed
+        df3 = st.session_state.df3_processed
+        
+        # 병합 실행
+        df1_with_costs = merge_repair_costs(df1, df3)
+        
+        # 병합 후 추가 전처리
+        df1_with_costs = preprocess_maintenance_data(df1_with_costs)
+        
+        st.session_state.df1_with_costs = df1_with_costs
+        
+        st.success("정비일지와 수리비 데이터가 성공적으로 병합되었습니다.")
+        
+        # 데이터 로드 상태 업데이트
+        st.session_state.data_loaded = True
     
-    # 병합 실행
-    df1_with_costs = merge_repair_costs(df1, df3)
-    st.session_state.df1_with_costs = df1_with_costs
+    except Exception as e:
+        st.error(f"데이터 병합 중 오류 발생: {e}")
+        st.session_state.data_loaded = False
+
+# 정비일지 데이터만 있는 경우
+elif 'df1_processed' in st.session_state and 'df3_processed' not in st.session_state:
+    try:
+        df1 = st.session_state.df1_processed
+        
+        # 수리비 컬럼 추가 (없는 경우)
+        if '수리비' not in df1.columns:
+            df1['수리비'] = np.nan
+        
+        # 추가 전처리
+        df1 = preprocess_maintenance_data(df1)
+        
+        st.session_state.df1_with_costs = df1
+        
+        st.info("수리비 데이터 없이 정비일지 데이터만 로드되었습니다.")
+        
+        # 데이터 로드 상태 업데이트
+        st.session_state.data_loaded = True
     
-    st.success("정비일지와 수리비 데이터가 성공적으로 병합되었습니다.")
-    
-    # 데이터 로드 상태 업데이트
-    st.session_state.data_loaded = True
+    except Exception as e:
+        st.error(f"정비일지 데이터 처리 중 오류 발생: {e}")
+        st.session_state.data_loaded = False
 
 # 로드된 데이터 확인 및 미리보기
 if st.session_state.data_loaded:
@@ -145,16 +247,23 @@ if st.session_state.data_loaded:
     
     with data_tabs[0]:
         if 'df1_with_costs' in st.session_state:
-            st.write(st.session_state.df1_with_costs.head())
+            df1 = st.session_state.df1_with_costs
+            st.write(df1.head())
             
             # 정비구분 정보 표시
-            if '정비구분' in st.session_state.df1_with_costs.columns:
-                maint_types = st.session_state.df1_with_costs['정비구분'].value_counts()
+            if '정비구분' in df1.columns:
+                maint_types = df1['정비구분'].value_counts(dropna=False)
                 st.write("정비구분별 건수:", maint_types)
+                
+                # 정비구분 값 확인 (디버깅용)
+                unique_types = df1['정비구분'].unique()
+                st.write("정비구분 고유값:", [str(val) for val in unique_types])
     
     with data_tabs[1]:
         if 'df3_processed' in st.session_state:
             st.write(st.session_state.df3_processed.head())
+        else:
+            st.info("수리비 데이터가 로드되지 않았습니다.")
     
     with data_tabs[2]:
         # 데이터 처리 정보 표시
@@ -166,9 +275,22 @@ if st.session_state.data_loaded:
             if 'df1_with_costs' in st.session_state:
                 df1 = st.session_state.df1_with_costs
                 st.write(f"- 정비일지 레코드 수: {len(df1):,}개")
-                st.write(f"- 정비일자 범위: {df1['정비일자'].min().strftime('%Y-%m-%d')} ~ {df1['정비일자'].max().strftime('%Y-%m-%d')}")
-                st.write(f"- 브랜드 수: {df1['브랜드'].nunique()}개")
-                st.write(f"- 모델 수: {df1['모델명'].nunique()}개")
+                
+                # 정비일자 범위 표시 (안전하게 처리)
+                if '정비일자' in df1.columns and df1['정비일자'].notna().any():
+                    try:
+                        min_date = df1['정비일자'].min()
+                        max_date = df1['정비일자'].max()
+                        if pd.notna(min_date) and pd.notna(max_date):
+                            st.write(f"- 정비일자 범위: {min_date.strftime('%Y-%m-%d')} ~ {max_date.strftime('%Y-%m-%d')}")
+                    except Exception as e:
+                        st.write("- 정비일자 범위: 날짜 형식 오류")
+                
+                # 브랜드 및 모델 정보 표시
+                if '브랜드' in df1.columns:
+                    st.write(f"- 브랜드 수: {df1['브랜드'].nunique()}개")
+                if '모델명' in df1.columns:
+                    st.write(f"- 모델 수: {df1['모델명'].nunique()}개")
         
         with col2:
             if 'df3_processed' in st.session_state:
@@ -178,6 +300,8 @@ if st.session_state.data_loaded:
                     st.write(f"- 총 수리비: {df3['출고금액'].sum():,.0f}원")
                 if '자재명' in df3.columns:
                     st.write(f"- 자재 종류 수: {df3['자재명'].nunique()}개")
+            else:
+                st.info("수리비 데이터가 로드되지 않았습니다.")
 
 else:
     # 데이터가 로드되지 않은 경우 안내 메시지 표시

@@ -293,132 +293,78 @@ def merge_dataframes(df1, df2):
 @st.cache_data
 def merge_repair_costs(maintenance_df, parts_df):
     """
-    정비일지(df1)와 소모품(df3) 데이터를 조건에 맞게 병합해 수리비 및 사용부품을 반환
-    
-    매칭 조건:
-    1. 관리번호가 일치
-    2. 정비자번호와 출고자가 일치
-    3. 정비일자와 출고일자가 ±30일 이내
+    정비일지와 소모품 데이터를 병합하여 수리비와 사용부품을 계산합니다.
+    조건:
+    - 관리번호 일치
+    - 정비자번호 == 출고자
+    - 정비일자와 출고일자 간 차이가 ±30일 이내
     """
     if maintenance_df is None or parts_df is None:
         return maintenance_df
 
     try:
-        # 데이터 복사
         df1 = maintenance_df.copy()
         df3 = parts_df.copy()
 
-        # 필수 컬럼 존재 여부 확인
-        required_cols_maintenance = ['관리번호', '정비일자', '정비자번호']
-        required_cols_repair = ['관리번호', '출고일자', '출고자', '출고금액', '자재명']
-        
-        for col in required_cols_maintenance:
-            if col not in df1.columns:
-                st.warning(f"정비일지에 '{col}' 컬럼이 없습니다.")
+        # 필수 컬럼 확인
+        required_cols_df1 = ['관리번호', '정비일자', '정비자번호']
+        required_cols_df3 = ['관리번호', '출고일자', '출고자', '출고금액', '자재명']
+        for col in required_cols_df1 + required_cols_df3:
+            if col not in (df1.columns if col in required_cols_df1 else df3.columns):
+                st.warning(f"필수 컬럼 누락: '{col}'")
                 return df1
-                
-        for col in required_cols_repair:
-            if col not in df3.columns:
-                st.warning(f"소모품 데이터에 '{col}' 컬럼이 없습니다.")
-                return maintenance_df
 
-        # 관리번호를 문자열로 변환 (숫자 형식 방지)
+        # 타입 정리
         df1['관리번호'] = df1['관리번호'].astype(str)
-        df3['관리번호'] = df3['관리번호'].astype(str)
-        
-        # 정비자번호와 출고자를 문자열로 변환
-        df1['정비자번호'] = df1['정비자번호'].astype(str)
-        df3['출고자'] = df3['출고자'].astype(str)
-        
-        # 결측값 보정
-        df1['정비자번호'] = df1['정비자번호'].fillna("")
-        df3['출고자'] = df3['출고자'].fillna("")
-        df3['자재명'] = df3['자재명'].fillna("")
-        df3['출고금액'] = df3['출고금액'].fillna(0)
-
-        # 날짜 형식 변환
+        df1['정비자번호'] = df1['정비자번호'].fillna("").astype(str)
         df1['정비일자'] = pd.to_datetime(df1['정비일자'], errors='coerce')
-        df3['출고일자'] = pd.to_datetime(df3['출고일자'], errors='coerce')
-        
-        # 기존 수리비 컬럼 제거 (있는 경우)
-        if '수리비' in df1.columns:
-            df1 = df1.drop('수리비', axis=1)
-        
-        # 기존 사용부품 컬럼 제거 (있는 경우)
-        if '사용부품' in df1.columns:
-            df1 = df1.drop('사용부품', axis=1)
 
-        # 결과 데이터프레임 초기화
-        result_df = df1.copy()
-        
-        # 벡터화된 방식으로 매칭 수행
-        # 1. 정비일지와 수리비 데이터를 관리번호와 정비자번호/출고자로 조인
+        df3['관리번호'] = df3['관리번호'].astype(str)
+        df3['출고자'] = df3['출고자'].astype(str).fillna("")
+        df3['출고일자'] = pd.to_datetime(df3['출고일자'], errors='coerce')
+        df3['자재명'] = df3['자재명'].fillna("")
+        df3['출고금액'] = pd.to_numeric(df3['출고금액'], errors='coerce').fillna(0)
+
+        # 인덱스를 저장
+        df1['원본인덱스'] = df1.index
+
+        # 병합: 관리번호 + 정비자번호 매칭
         merged = pd.merge(
-            df1[['관리번호', '정비일자', '정비자번호']],
+            df1[['관리번호', '정비일자', '정비자번호', '원본인덱스']],
             df3[['관리번호', '출고일자', '출고자', '출고금액', '자재명']],
             left_on=['관리번호', '정비자번호'],
             right_on=['관리번호', '출고자'],
-            how='inner'  # 매칭되는 데이터만 유지
+            how='inner'
         )
-        
-        # 2. 날짜 차이 계산 및 ±30일 이내 필터링
+
+        # 날짜 차이 필터
         merged['일자차이'] = (merged['출고일자'] - merged['정비일자']).dt.days
         merged = merged[merged['일자차이'].abs() <= 30]
-        
-        # 3. 정비일지 인덱스 추가 (나중에 그룹화할 때 사용)
-        # 원본 df1의 인덱스를 사용하여 매핑 테이블 생성
-        index_map = pd.Series(df1.index, index=pd.MultiIndex.from_frame(df1[['관리번호', '정비일자', '정비자번호']]))
-        
-        # 매핑 테이블을 사용하여 merged에 원본 인덱스 추가
-        merged['원본인덱스'] = merged.apply(
-            lambda row: index_map.get((row['관리번호'], row['정비일자'], row['정비자번호']), None), 
-            axis=1
-        )
-        
-        # 4. 원본인덱스별로 그룹화하여 수리비 합계 및 사용부품 목록 계산
-        if not merged.empty:
-            # 수리비 합계 계산
-            cost_summary = merged.groupby('원본인덱스')['출고금액'].sum().reset_index()
-            cost_summary.columns = ['원본인덱스', '수리비']
-            
-            # 사용부품 목록 계산
-            parts_summary = merged.groupby('원본인덱스')['자재명'].apply(
-                lambda x: ', '.join(x.dropna().unique())
-            ).reset_index()
-            parts_summary.columns = ['원본인덱스', '사용부품']
-            
-            # 결과 데이터프레임에 수리비와 사용부품 추가
-            result_df['수리비'] = 0
-            result_df['사용부품'] = ""
-            
-            # 인덱스 기반으로 값 설정
-            for _, row in cost_summary.iterrows():
-                result_df.at[row['원본인덱스'], '수리비'] = row['수리비']
-            
-            for _, row in parts_summary.iterrows():
-                result_df.at[row['원본인덱스'], '사용부품'] = row['사용부품']
-            
-            # 매칭 결과 출력
-            match_count = (result_df['수리비'] > 0).sum()
-            total_count = len(result_df)
-            match_rate = match_count / total_count * 100 if total_count > 0 else 0
-            print(f"총 {total_count}개 중 {match_count}개 매칭됨 ({match_rate:.1f}%)")
-        else:
-            # 매칭된 데이터가 없는 경우
-            result_df['수리비'] = 0
-            result_df['사용부품'] = ""
-            print("매칭된 데이터가 없습니다.")
 
-        return result_df
+        # 수리비 집계
+        cost_summary = merged.groupby('원본인덱스')['출고금액'].sum()
+        parts_summary = merged.groupby('원본인덱스')['자재명'].agg(
+            lambda x: ', '.join(sorted(set(x.dropna())))
+        )
+
+        # 결과 반영
+        df1['수리비'] = df1['원본인덱스'].map(cost_summary).fillna(0)
+        df1['사용부품'] = df1['원본인덱스'].map(parts_summary).fillna("")
+
+        df1.drop('원본인덱스', axis=1, inplace=True)
+
+        # 로그 출력
+        matched = (df1['수리비'] > 0).sum()
+        st.info(f"총 {len(df1)}건 중 {matched}건 수리비 매칭됨 ({matched / len(df1) * 100:.1f}%)")
+
+        return df1
 
     except Exception as e:
-        st.error(f"병합 중 오류 발생: {e}")
-        import traceback
+        st.error("병합 중 오류 발생: " + str(e))
         st.error(traceback.format_exc())
-        # 오류 발생 시 원본 데이터에 빈 컬럼 추가
-        maintenance_df['수리비'] = 0
-        maintenance_df['사용부품'] = ""
-        return maintenance_df
+        df1['수리비'] = 0
+        df1['사용부품'] = ""
+        return df1
 
 # 재정비 간격 계산을 위한 날짜 처리
 @st.cache_data

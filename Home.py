@@ -110,6 +110,46 @@ def preprocess_maintenance_data(df):
         st.error(f"정비일지 데이터 전처리 중 오류 발생: {e}")
         return df
 
+# 소속별 수리비 통계 계산 함수
+def calculate_dept_repair_stats(df, df4=None):
+    """소속별 수리비 통계 계산 함수"""
+    try:
+        if '정비자소속' in df.columns and '수리비' in df.columns:
+            # 유효한 데이터만 필터링
+            df_valid = df[['정비자소속', '수리비']].copy()
+            df_valid = df_valid.dropna()
+            
+            if not df_valid.empty:
+                # 소속별 총 수리비 및 건수 계산
+                dept_stats = df_valid.groupby('정비자소속').agg({
+                    '수리비': ['sum', 'mean', 'count']
+                })
+                
+                dept_stats.columns = ['총수리비', '평균수리비', '건수']
+                dept_stats = dept_stats.reset_index()
+                
+                # 조직도 데이터에서 소속별 인원 수 가져오기
+                if df4 is not None and '소속' in df4.columns:
+                    total_staff_by_dept = df4['소속'].value_counts()
+                    
+                    # 소속별 인원 수 매핑
+                    dept_stats['소속인원수'] = dept_stats['정비자소속'].map(
+                        lambda x: total_staff_by_dept.get(x, 1)
+                    )
+                else:
+                    # 조직도 데이터가 없으면 기본값 1 설정
+                    dept_stats['소속인원수'] = 1
+                
+                # 인원당 수리비 계산
+                dept_stats['인원당수리비'] = (dept_stats['총수리비'] / dept_stats['소속인원수']).round(0)
+                
+                return dept_stats
+            
+        return None
+    except Exception as e:
+        st.warning(f"소속별 수리비 통계 계산 중 오류 발생: {e}")
+        return None
+
 # 사용자 업로드 파일 처리
 if uploaded_file1 is not None:
     try:
@@ -192,50 +232,40 @@ if uploaded_file3 is not None:
     except Exception as e:
         st.error(f"수리비 데이터 처리 중 오류 발생: {e}")
 
-# 정비일지와 수리비 데이터 병합
-if 'df1_processed' in st.session_state and 'df3_processed' in st.session_state:
-    try:
-        df1 = st.session_state.df1_processed
-        df3 = st.session_state.df3_processed
-        
-        # 병합 실행
-        df1_with_costs = merge_repair_costs(df1, df3)
-        
-        # 병합 후 추가 전처리
-        df1_with_costs = preprocess_maintenance_data(df1_with_costs)
-        
-        st.session_state.df1_with_costs = df1_with_costs
-        
-        st.success("정비일지와 수리비 데이터가 성공적으로 병합되었습니다.")
-        
-        # 데이터 로드 상태 업데이트
-        st.session_state.data_loaded = True
-    
-    except Exception as e:
-        st.error(f"데이터 병합 중 오류 발생: {e}")
-        st.session_state.data_loaded = False
-
-# 정비일지 데이터만 있는 경우
-elif 'df1_processed' in st.session_state and 'df3_processed' not in st.session_state:
+# 정비일지와 수리비 데이터 병합 - 이 부분만 유지하고 중복 코드 제거
+if 'df1_processed' in st.session_state:
     try:
         df1 = st.session_state.df1_processed
         
-        # 수리비 컬럼 추가 (없는 경우)
-        if '수리비' not in df1.columns:
-            df1['수리비'] = np.nan
+        # 수리비 데이터가 있는 경우 병합
+        if 'df3_processed' in st.session_state:
+            df3 = st.session_state.df3_processed
+            df1_with_costs = merge_repair_costs(df1, df3)
+            message = "정비일지와 수리비 데이터가 성공적으로 병합되었습니다."
+        else:
+            # 수리비 데이터가 없는 경우
+            df1_with_costs = df1.copy()
+            if '수리비' not in df1_with_costs.columns:
+                df1_with_costs['수리비'] = np.nan
+            message = "수리비 데이터 없이 정비일지 데이터만 로드되었습니다."
         
         # 추가 전처리
-        df1 = preprocess_maintenance_data(df1)
+        df1_with_costs = preprocess_maintenance_data(df1_with_costs)
         
-        st.session_state.df1_with_costs = df1
+        # 소속별 수리비 통계 계산
+        dept_stats = calculate_dept_repair_stats(df1_with_costs, df4)
+        if dept_stats is not None:
+            st.session_state.dept_repair_stats = dept_stats
         
-        st.info("수리비 데이터 없이 정비일지 데이터만 로드되었습니다.")
+        # 결과 저장
+        st.session_state.df1_with_costs = df1_with_costs
+        st.success(message)
         
         # 데이터 로드 상태 업데이트
         st.session_state.data_loaded = True
     
     except Exception as e:
-        st.error(f"정비일지 데이터 처리 중 오류 발생: {e}")
+        st.error(f"데이터 처리 중 오류 발생: {e}")
         st.session_state.data_loaded = False
 
 # 로드된 데이터 확인 및 미리보기
@@ -302,6 +332,12 @@ if st.session_state.data_loaded:
                     st.write(f"- 자재 종류 수: {df3['자재명'].nunique()}개")
             else:
                 st.info("수리비 데이터가 로드되지 않았습니다.")
+                
+        # 소속별 통계 정보 표시 (디버깅용)
+        if 'dept_repair_stats' in st.session_state and st.session_state.dept_repair_stats is not None:
+            with st.expander("소속별 통계 정보", expanded=False):
+                st.write("소속별 수리비 통계가 계산되었습니다.")
+                st.write(f"통계 항목 수: {len(st.session_state.dept_repair_stats)}개")
 
 else:
     # 데이터가 로드되지 않은 경우 안내 메시지 표시

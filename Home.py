@@ -279,15 +279,6 @@ if st.session_state.data_loaded:
         if 'df1_with_costs' in st.session_state:
             df1 = st.session_state.df1_with_costs
             st.write(df1.head())
-            
-            # 정비구분 정보 표시
-            if '정비구분' in df1.columns:
-                maint_types = df1['정비구분'].value_counts(dropna=False)
-                st.write("정비구분별 건수:", maint_types)
-                
-                # 정비구분 값 확인 (디버깅용)
-                unique_types = df1['정비구분'].unique()
-                st.write("정비구분 고유값:", [str(val) for val in unique_types])
     
     with data_tabs[1]:
         if 'df3_processed' in st.session_state:
@@ -313,8 +304,8 @@ if st.session_state.data_loaded:
                         max_date = df1['정비일자'].max()
                         if pd.notna(min_date) and pd.notna(max_date):
                             st.write(f"- 정비일자 범위: {min_date.strftime('%Y-%m-%d')} ~ {max_date.strftime('%Y-%m-%d')}")
-                    except Exception as e:
-                        st.write("- 정비일자 범위: 날짜 형식 오류")
+                    except Exception:
+                        pass
                 
                 # 브랜드 및 모델 정보 표시
                 if '브랜드' in df1.columns:
@@ -332,12 +323,6 @@ if st.session_state.data_loaded:
                     st.write(f"- 자재 종류 수: {df3['자재명'].nunique()}개")
             else:
                 st.info("수리비 데이터가 로드되지 않았습니다.")
-                
-        # 소속별 통계 정보 표시 (디버깅용)
-        if 'dept_repair_stats' in st.session_state and st.session_state.dept_repair_stats is not None:
-            with st.expander("소속별 통계 정보", expanded=False):
-                st.write("소속별 수리비 통계가 계산되었습니다.")
-                st.write(f"통계 항목 수: {len(st.session_state.dept_repair_stats)}개")
 
 else:
     # 데이터가 로드되지 않은 경우 안내 메시지 표시

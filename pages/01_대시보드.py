@@ -298,17 +298,19 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     # 미리 계산된 통계 사용
                     dept_stats = st.session_state.dept_repair_stats
                     
-                    # 상위 10개 소속 선택
-                    top_depts_by_count = dept_stats.sort_values('건수', ascending=False).head(10)
-                    top_depts_by_count2 = top_depts_by_count[top_depts_by_count['건수'] > 3]
+                    # 3건 초과인 소속만 필터링
+                    filtered_depts = dept_stats[dept_stats['건수'] > 3]
                     
-                    if not top_depts_by_count2.empty:
+                    # 필터링된 데이터에서 상위 10개 소속 선택
+                    top_depts_by_count = filtered_depts.sort_values('건수', ascending=False).head(10)
+                    
+                    if not top_depts_by_count.empty:
                         # 그래프 생성
                         fig, ax = create_figure(figsize=(10, 8), dpi=150)
                         sns.barplot(x='건수', y='정비자소속', data=top_depts_by_count, ax=ax, palette="Blues_r")
                         
                         # 막대 위에 텍스트 표시
-                        for i, row in enumerate(top_depts_by_count2.itertuples()):
+                        for i, row in enumerate(top_depts_by_count.itertuples()):
                             ax.text(row.건수 + 0.5, i, f"{row.건수}건", va='center', fontsize=8)
                         
                         ax.set_xlabel('정비 건수')
@@ -317,7 +319,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         st.pyplot(fig, use_container_width=True)
                         st.markdown(get_image_download_link(fig, f'{category_name}_파트별_정비건수.png', '파트별 정비건수 다운로드'), unsafe_allow_html=True)
                     else:
-                        st.warning("소속별 정비 건수 데이터가 없습니다.")
+                        st.warning("3건 초과인 소속별 정비 건수 데이터가 없습니다.")
                 
                 # 파트별 건수 대비 수리비 부분 수정
                 with col2:
@@ -343,7 +345,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         fig, ax = create_figure(figsize=(12, 8), dpi=150)
                         
                         # 효율성 지수에 따라 색상 결정 (1보다 크면 빨간색, 작으면 파란색)
-                        colors = ["#1c66f0" if x > 1 else '#bdc3c7' for x in sorted_depts['효율성지수']]
+                        colors = ["#234fa0" if x > 1 else '#bdc3c7' for x in sorted_depts['효율성지수']]
                         
                         # 효율성 지수 막대 그래프
                         bars = ax.bar(sorted_depts['정비자소속'], sorted_depts['효율성지수'], color=colors)
@@ -357,7 +359,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         # 막대 위에 텍스트 표시
                         for i, bar in enumerate(bars):
                             height = bar.get_height()
-                            ax.text(bar.get_x() + bar.get_width()/2., height + 0.02,
+                            ax.text(bar.get_x() + bar.get_width()/2., height + 0.01,
                                     f'{height:.2f}', ha='center', va='bottom', fontsize=10)
                         
                         plt.tight_layout()
@@ -462,7 +464,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                                 fig, ax = create_figure(figsize=(10, 8), dpi=150)
                                 
                                 # 효율성 지수에 따라 색상 결정 (1보다 크면 초록색, 작으면 회색)
-                                colors = ['#1c66f0' if x > 1 else '#bdc3c7' for x in sorted_workers['효율성지수']]
+                                colors = ['#234fa0' if x > 1 else '#bdc3c7' for x in sorted_workers['효율성지수']]
                                 
                                 # 효율성 지수 막대 그래프
                                 bars = ax.bar(sorted_workers['정비자정보'], sorted_workers['효율성지수'], color=colors)

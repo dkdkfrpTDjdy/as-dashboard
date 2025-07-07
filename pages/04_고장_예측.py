@@ -163,9 +163,14 @@ with col1:
     selected_brand = st.selectbox("브랜드(필수)", brand_list)
 
 with col2:
-    # 선택된 브랜드의 모델 목록
     if selected_brand:
-        brand_models = sorted(df1[df1['브랜드'] == selected_brand]['모델명'].unique())
+        brand_models = (
+            df1[df1['브랜드'] == selected_brand]['모델명']
+            .value_counts()
+            .sort_values(ascending=False)
+            .index
+            .tolist()
+        )
         selected_model = st.selectbox("모델(필수)", brand_models)
     else:
         selected_model = None

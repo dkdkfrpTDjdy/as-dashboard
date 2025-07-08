@@ -456,7 +456,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                                 worker_stats['효율성지수'] = worker_stats['수리비비율'] / worker_stats['건수비율']
                                 
                                 # 효율성 지수 기준으로 정렬
-                                sorted_workers = worker_stats.sort_values('효율성지수', ascending=False).head(15)
+                                sorted_workers = worker_stats.sort_values('효율성지수', ascending=False).head(20)
                                 
                                 # 그래프 생성
                                 fig, ax = create_figure(figsize=(10, 8), dpi=150)
@@ -466,21 +466,19 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                                 colors = ['#234fa0' if x > efficiency_mean else '#bdc3c7' for x in sorted_workers['효율성지수']]
                                 
                                 # 효율성 지수 막대 그래프
-                                bars = ax.bar(sorted_workers['정비자정보'], sorted_workers['효율성지수'], color=colors)
+                                bars = ax.barh(sorted_workers['정비자정보'], sorted_workers['효율성지수'], color=colors)
                                 
                                 # 기준선 (1.0) 추가
-                                ax.axhline(y=efficiency_mean, color='red', linestyle='--', alpha=0.7)
-                                ax.text(len(sorted_workers)-1, efficiency_mean + 0.1, f"평균 효율: {efficiency_mean:.2f}", color='black', ha='right')
+                                ax.axvline(x=efficiency_mean, color='red', linestyle='--', alpha=0.7)
+                                ax.text(efficiency_mean + 0.05, len(sorted_workers) - 1, f"평균 효율: {efficiency_mean:.2f}", color='black', va='bottom')
                                 
-                                # 축 설정
-                                plt.xticks(rotation=45, ha='right')
-                                
-                                # 막대 위에 텍스트 표시
+                                # 막대 오른쪽에 텍스트 표시
                                 for i, bar in enumerate(bars):
-                                    height = bar.get_height()
-                                    ax.text(bar.get_x() + bar.get_width()/2., height + 0.05,
-                                            f'{height:.2f}', ha='center', va='bottom', fontsize=9)
-                                
+                                    width = bar.get_width()
+                                    ax.text(width + 0.1, bar.get_y() + bar.get_height()/2, f'{width:.2f}', va='center', fontsize=9)
+
+                                # 시각적 정리: 정렬 및 레이아웃
+                                ax.invert_yaxis()  # 상위 효율 정비자가 위로
                                 plt.tight_layout()
                                 
                                 st.pyplot(fig, use_container_width=True)

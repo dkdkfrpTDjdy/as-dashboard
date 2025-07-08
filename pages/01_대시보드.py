@@ -461,7 +461,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                                 # 그래프 생성
                                 bar_count = len(sorted_workers)
                                 fig_height = bar_count * 0.4 + 1.5
-                                fig, ax = create_figure(figsize=(12, fig_height), dpi=150)
+                                fig, ax = create_figure(figsize=(10, fig_height), dpi=150)
 
                                 efficiency_mean = worker_stats['효율성지수'].mean()
                                 # 효율성 지수에 따라 색상 결정 (1보다 크면 초록색, 작으면 회색)

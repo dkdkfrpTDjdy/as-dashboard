@@ -340,29 +340,41 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         
                         # 효율성 지수 기준으로 정렬
                         sorted_depts = filtered_depts.sort_values('효율성지수', ascending=False).head(10)
+
+                        efficiency_mean = filtered_depts['효율성지수'].mean()
                         
+                        # 색상 팔레트 준비: Blues_r (연한 → 짙은)
+                        palette = sns.color_palette("Blues_r", n_colors=2)
+                        colors = [
+                            palette[1] if val > efficiency_mean else palette[0]
+                            for val in sorted_depts['효율성지수']
+                        ]
+
                         # 그래프 생성
                         fig, ax = create_figure(figsize=(12, 8), dpi=150)
                         
-                        # 효율성 지수에 따라 색상 결정 (1보다 크면 빨간색, 작으면 파란색)
-                        colors = ["#234fa0" if x > 1 else '#bdc3c7' for x in sorted_depts['효율성지수']]
+                        # seaborn barplot 사용
+                        sns.barplot(
+                            x=sorted_depts['정비자소속'],
+                            y=sorted_depts['효율성지수'],
+                            palette=colors,
+                            ax=ax
+                        )
                         
-                        # 효율성 지수 막대 그래프
-                        bars = ax.bar(sorted_depts['정비자소속'], sorted_depts['효율성지수'], color=colors)
-                        
-                        # 기준선 (1.0) 추가
-                        ax.axhline(y=1.0, color='black', linestyle='--', alpha=0.7)
+                        # 기준선 (평균선)
+                        ax.axhline(y=efficiency_mean, color='red', linestyle='--', alpha=0.7)
 
-                        
                         # 막대 위에 텍스트 표시
-                        for i, bar in enumerate(bars):
+                        for i, bar in enumerate(ax.patches):
                             height = bar.get_height()
-                            ax.text(bar.get_x() + bar.get_width()/2., height + 0.01,
-                                    f'{height:.2f}', ha='center', va='bottom', fontsize=10)
-                        
+                            ax.text(bar.get_x() + bar.get_width() / 2., height + 0.01, f'{height:.2f}', 
+                                    ha='center', va='bottom', fontsize=10)
+
                         plt.tight_layout()
-                        
+                        fig.subplots_adjust(top=0.95, bottom=0.05, left=0.1, right=0.95)
+
                         st.pyplot(fig, use_container_width=True)
+
                         st.markdown(get_image_download_link(fig, f'{category_name}_파트별_수리비효율성.png', '파트별 수리비 효율성 다운로드'), unsafe_allow_html=True)
                         
                         # 효율성 지수에 대한 설명 추가
@@ -457,30 +469,41 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                                 
                                 # 효율성 지수 기준으로 정렬
                                 sorted_workers = worker_stats.sort_values('효율성지수', ascending=False).head(20)
-                                
+
+                                efficiency_mean = worker_stats['효율성지수'].mean()
+
+                                # Blues_r 팔레트에서 색상 2개 추출: [0] 연한색, [1] 짙은색
+                                palette = sns.color_palette("Blues_r", n_colors=2)
+
+                                # 평균 초과 → 짙은색, 이하 → 연한색으로 색상 리스트 구성
+                                colors = [
+                                    palette[1] if val > efficiency_mean else palette[0]
+                                    for val in sorted_workers['효율성지수']
+                                ]
+
                                 # 그래프 생성
                                 fig, ax = create_figure(figsize=(10, 8), dpi=150)
 
-                                efficiency_mean = worker_stats['효율성지수'].mean()
-                                # 효율성 지수에 따라 색상 결정 (1보다 크면 초록색, 작으면 회색)
-                                colors = ['#234fa0' if x > efficiency_mean else '#bdc3c7' for x in sorted_workers['효율성지수']]
-                                
-                                # 효율성 지수 막대 그래프
-                                bars = ax.barh(sorted_workers['정비자정보'], sorted_workers['효율성지수'], color=colors)
+                                # seaborn barplot 사용
+                                sns.barplot(
+                                    x=sorted_workers['효율성지수'],
+                                    y=sorted_workers['정비자정보'],
+                                    palette=colors,
+                                    ax=ax
+                                )
                                 
                                 # 기준선 (1.0) 추가
                                 ax.axvline(x=efficiency_mean, color='red', linestyle='--', alpha=0.7)
                                 
                                 # 막대 오른쪽에 텍스트 표시
-                                for i, bar in enumerate(bars):
+                                for i, bar in enumerate(ax.patches):
                                     width = bar.get_width()
                                     ax.text(width + 0.05, bar.get_y() + bar.get_height()/2, f'{width:.2f}', va='center', fontsize=9)
 
-                                # 시각적 정리: 정렬 및 레이아웃
-                                ax.invert_yaxis()
+                                # 시각적 정리
                                 plt.tight_layout()
                                 fig.subplots_adjust(top=0.95, bottom=0.05, left=0.25, right=0.95)
-                                
+
                                 st.pyplot(fig, use_container_width=True)
                                 st.markdown(get_image_download_link(fig, f'{category_name}_정비자별_수리비효율성.png', '정비자별 수리비 효율성 다운로드'), unsafe_allow_html=True)
                                 

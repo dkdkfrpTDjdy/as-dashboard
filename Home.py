@@ -57,17 +57,6 @@ def load_static_data():
 # 내장 데이터 로드 함수 호출
 df2, df4 = load_static_data()
 
-# 세션 상태에 저장
-if df2 is not None:
-    st.session_state.df2 = df2
-    st.sidebar.success("자산조회 데이터 로드 완료")
-    st.sidebar.info(f"자산조회 데이터 크기: {df2.shape}")
-
-if df4 is not None:
-    st.session_state.df4 = df4
-    st.sidebar.success("조직도 데이터 로드 완료")
-    st.sidebar.info(f"조직도 데이터 크기: {df4.shape}")
-
 # 메인 제목
 st.title("산업장비 AS 분석 대시보드")
 
@@ -196,7 +185,7 @@ if uploaded_file1 is not None:
                     st.warning(f"조직도 데이터 매핑 중 오류 발생: {e}")
             
             st.session_state.df1_processed = df1
-            st.success(f"정비일지 데이터가 성공적으로 로드되었습니다. (총 {len(df1)}개 레코드)")
+            st.success(f"정비일지 데이터가 성공적으로 로드되었습니다.")
     
     except Exception as e:
         st.error(f"정비일지 데이터 처리 중 오류 발생: {e}")
@@ -227,7 +216,7 @@ if uploaded_file3 is not None:
                     st.warning(f"조직도 데이터 매핑 중 오류 발생: {e}")
             
             st.session_state.df3_processed = df3
-            st.success(f"수리비 데이터가 성공적으로 로드되었습니다. (총 {len(df3)}개 레코드)")
+            st.success(f"수리비 데이터가 성공적으로 로드되었습니다.")
     
     except Exception as e:
         st.error(f"수리비 데이터 처리 중 오류 발생: {e}")
@@ -241,13 +230,12 @@ if 'df1_processed' in st.session_state:
         if 'df3_processed' in st.session_state:
             df3 = st.session_state.df3_processed
             df1_with_costs = merge_repair_costs(df1, df3)
-            message = "정비일지와 수리비 데이터가 성공적으로 병합되었습니다."
         else:
             # 수리비 데이터가 없는 경우
             df1_with_costs = df1.copy()
             if '수리비' not in df1_with_costs.columns:
                 df1_with_costs['수리비'] = np.nan
-            message = "수리비 데이터 없이 정비일지 데이터만 로드되었습니다."
+            message = "수리비 데이터 없이 정비일지 데이터만 업로드되었습니다."
         
         # 추가 전처리
         df1_with_costs = preprocess_maintenance_data(df1_with_costs)
@@ -368,8 +356,3 @@ else:
     - 데이터 로드 후 자동으로 데이터 전처리가 수행됩니다.
     - 내부/외부 정비구분이 있는 경우 각각 분석할 수 있습니다.
     """)
-    
-    # 샘플 화면 표시
-    with st.expander("분석 화면 예시", expanded=True):
-        st.image("https://via.placeholder.com/800x400?text=AS+분석+대시보드+예시", 
-                 caption="분석 화면 예시 (데이터 업로드 시 실제 데이터로 분석됩니다)")

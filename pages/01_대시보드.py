@@ -136,7 +136,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     for i, v in enumerate(monthly_counts['건수']):
                         ax.text(i, v + max(monthly_counts['건수']) * 0.01, str(v), ha='center')
                         
-                    plt.xticks()
+                    plt.xticks(rotation=45)
                     ax.set_ylabel('건수')
                     plt.tight_layout()
                     
@@ -207,7 +207,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         
                         # 평균값 텍스트 표시
                         for index, row in monthly_avg.iterrows():
-                            ax.text(index, row[operation_col] + 0.2, f"{row[operation_col]:.1f}시간", ha='center')
+                            ax.text(index, row[operation_col] + 0.2, f"{row[operation_col]:.0f}", ha='center')
                         
                         plt.xticks(rotation=45)
                         plt.tight_layout()

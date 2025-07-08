@@ -346,7 +346,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         # 색상 팔레트 준비: Blues_r (연한 → 짙은)
                         palette = sns.color_palette("Blues_r", n_colors=2)
                         colors = [
-                            palette[1] if val > efficiency_mean else palette[0]
+                            palette[0] if val > efficiency_mean else palette[1]
                             for val in sorted_depts['효율성지수']
                         ]
 
@@ -377,8 +377,16 @@ def display_integrated_dashboard(df, category_name, key_prefix):
 
                         st.markdown(get_image_download_link(fig, f'{category_name}_파트별_수리비효율성.png', '파트별 수리비 효율성 다운로드'), unsafe_allow_html=True)
                         
-                        # 효율성 지수에 대한 설명 추가
-                        st.info("1 초과: 건수 대비 수리비가 많이 소요됨 / 1 미만: 효율적인 비용으로 수리함")
+                        st.markdown(
+                            f"""
+                            <div style="background-color:#e1f5fe; padding: 10px; border-radius: 5px;">
+                                <b>평균 효율성 지수 기준:</b> {efficiency_mean:.2f}<br>
+                                <b>{efficiency_mean:.2f} 초과</b> → 평균보다 높은 수리비 사용 <span style="color:red;">(비효율)</span><br>
+                                <b>{efficiency_mean:.2f} 이하</b> → 평균보다 적은 수리비로 처리 <span style="color:green;">(고효율)</span>
+                            </div>
+                            """,
+                            unsafe_allow_html=True
+                        )
                         
                         # 데이터 테이블로도 표시
                         display_cols = ['정비자소속', '건수', '총수리비', '건수비율', '수리비비율', '효율성지수']
@@ -470,14 +478,14 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                                 # 효율성 지수 기준으로 정렬
                                 sorted_workers = worker_stats.sort_values('효율성지수', ascending=False).head(20)
 
-                                efficiency_mean = worker_stats['효율성지수'].mean()
+                                efficiency_mean2 = worker_stats['효율성지수'].mean()
 
                                 # Blues_r 팔레트에서 색상 2개 추출: [0] 연한색, [1] 짙은색
                                 palette = sns.color_palette("Blues_r", n_colors=2)
 
                                 # 평균 초과 → 짙은색, 이하 → 연한색으로 색상 리스트 구성
                                 colors = [
-                                    palette[1] if val > efficiency_mean else palette[0]
+                                    palette[0] if val > efficiency_mean2 else palette[1]
                                     for val in sorted_workers['효율성지수']
                                 ]
 
@@ -493,7 +501,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                                 )
                                 
                                 # 기준선 (1.0) 추가
-                                ax.axvline(x=efficiency_mean, color='red', linestyle='--', alpha=0.7)
+                                ax.axvline(x=efficiency_mean2, color='red', linestyle='--', alpha=0.7)
                                 
                                 # 막대 오른쪽에 텍스트 표시
                                 for i, bar in enumerate(ax.patches):
@@ -511,9 +519,9 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                                 st.markdown(
                                     f"""
                                     <div style="background-color:#e1f5fe; padding: 10px; border-radius: 5px;">
-                                        <b>평균 효율성 지수 기준:</b> {efficiency_mean:.2f}<br>
-                                        <b>{efficiency_mean:.2f} 초과</b> → 평균보다 높은 수리비 사용 <span style="color:red;">(비효율)</span><br>
-                                        <b>{efficiency_mean:.2f} 이하</b> → 평균보다 적은 수리비로 처리 <span style="color:green;">(고효율)</span>
+                                        <b>평균 효율성 지수 기준:</b> {efficiency_mean2:.2f}<br>
+                                        <b>{efficiency_mean2:.2f} 초과</b> → 평균보다 높은 수리비 사용 <span style="color:red;">(비효율)</span><br>
+                                        <b>{efficiency_mean2:.2f} 이하</b> → 평균보다 적은 수리비로 처리 <span style="color:green;">(고효율)</span>
                                     </div>
                                     """,
                                     unsafe_allow_html=True

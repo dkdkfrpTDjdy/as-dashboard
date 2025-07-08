@@ -179,13 +179,13 @@ def display_fault_analysis(df, maintenance_type=None):
                     if '고장유형' in filtered_df_type.columns:
                         top_faults_by_type = filtered_df_type['고장유형'].value_counts().head(10)
                         if not top_faults_by_type.empty:
-                            fig, ax = create_figure(figsize=(10, 8), dpi=150)
+                            fig, ax = create_figure(figsize=(10, 6), dpi=150)
                             sns.barplot(x=top_faults_by_type.values, y=top_faults_by_type.index, ax=ax, palette=f"{current_theme}_r")
                             for i, v in enumerate(top_faults_by_type.values):
                                 ax.text(v + max(top_faults_by_type.values) * 0.002, i, str(v), va='center', fontsize=10)
                             plt.tight_layout()
                             st.pyplot(fig, use_container_width=True)
-                            st.markdown(get_image_download_link(fig, f'{title_prefix}{selected_value}_고장유형_TOP10.png', f'{selected_value} 고장유형 TOP10 다운로드'), unsafe_allow_html=True)
+                            st.markdown(get_image_download_link(fig, f'{title_prefix}{selected_value}_고장유형_TOP10.png', f"{title_prefix}{selected_type} 고장유형 TOP10 다운로드'), unsafe_allow_html=True)
                         else:
                             st.info(f"{selected_type}({selected_value})에 대한 고장유형 데이터가 없습니다.")
                     else:

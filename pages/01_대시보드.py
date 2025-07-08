@@ -403,9 +403,9 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         
                         # 값 표시
                         for i, v in enumerate(site_costs.values):
-                            ax.text(v + v*0.005, i, f"{v:,.0f}원", va='center', fontsize=6)
+                            ax.text(v + v*0.005, i, f"{v/1000:,.0f}천원", va='center', fontsize=6)
                         
-                        ax.set_xlabel('총 수리비 (원)')
+                        ax.set_xlabel('총 수리비 (천원)')
                         plt.tight_layout()
                         
                         st.pyplot(fig, use_container_width=True)
@@ -461,7 +461,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                                 # 그래프 생성
                                 bar_count = len(sorted_workers)
                                 fig_height = bar_count * 0.4 + 1.5
-                                fig, ax = create_figure(figsize=(10, fig_height), dpi=150)
+                                fig, ax = create_figure(figsize=(12, fig_height), dpi=150)
 
                                 efficiency_mean = worker_stats['효율성지수'].mean()
                                 # 효율성 지수에 따라 색상 결정 (1보다 크면 초록색, 작으면 회색)
@@ -476,7 +476,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                                 # 막대 오른쪽에 텍스트 표시
                                 for i, bar in enumerate(bars):
                                     width = bar.get_width()
-                                    ax.text(width + 0.1, bar.get_y() + bar.get_height()/2, f'{width:.2f}', va='center', fontsize=9)
+                                    ax.text(width + 0.05, bar.get_y() + bar.get_height()/2, f'{width:.2f}', va='center', fontsize=9)
 
                                 # 시각적 정리: 정렬 및 레이아웃
                                 ax.invert_yaxis()

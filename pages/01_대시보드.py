@@ -403,9 +403,9 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                         
                         # 값 표시
                         for i, v in enumerate(site_costs.values):
-                            ax.text(v + v*0.001, i, f"{v/1000:,.0f}천원", va='center', fontsize=6)
+                            ax.text(v + v*0.001, i, f"{v/1000:,.0f}원", va='center', fontsize=6)
                         
-                        ax.set_xlabel('총 수리비 (천원)')
+                        ax.set_xlabel('총 수리비 (단위: 천원)')
                         plt.tight_layout()
                         
                         st.pyplot(fig, use_container_width=True)

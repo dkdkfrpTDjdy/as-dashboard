@@ -185,7 +185,7 @@ def display_fault_analysis(df, maintenance_type=None):
                                 ax.text(v + max(top_faults_by_type.values) * 0.002, i, str(v), va='center', fontsize=10)
                             plt.tight_layout()
                             st.pyplot(fig, use_container_width=True)
-                            st.markdown(get_image_download_link(fig, f'{title_prefix}{selected_value}_고장유형_TOP10.png', f"{title_prefix}{selected_type} 고장유형 TOP10 다운로드'), unsafe_allow_html=True)
+                            st.markdown(get_image_download_link(fig, f'{title_prefix}{selected_value}_고장유형_TOP10.png', f"{title_prefix}{selected_type} 고장유형 TOP10 다운로드"), unsafe_allow_html=True)
                         else:
                             st.info(f"{selected_type}({selected_value})에 대한 고장유형 데이터가 없습니다.")
                     else:

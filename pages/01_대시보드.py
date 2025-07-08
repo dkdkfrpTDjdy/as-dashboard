@@ -299,7 +299,7 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                     dept_stats = st.session_state.dept_repair_stats
                     
                     # 3건 초과인 소속만 필터링
-                    filtered_depts = dept_stats[dept_stats['건수'] > 3]
+                    filtered_depts = dept_stats[dept_stats['건수'] > 30]
                     
                     # 필터링된 데이터에서 상위 10개 소속 선택
                     top_depts_by_count = filtered_depts.sort_values('건수', ascending=False).head(10)
@@ -460,15 +460,17 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                                 
                                 # 그래프 생성
                                 fig, ax = create_figure(figsize=(10, 8), dpi=150)
-                                
+
+                                efficiency_mean = worker_stats['효율성지수'].mean()
                                 # 효율성 지수에 따라 색상 결정 (1보다 크면 초록색, 작으면 회색)
-                                colors = ['#234fa0' if x > 1 else '#bdc3c7' for x in sorted_workers['효율성지수']]
+                                colors = ['#234fa0' if x > efficiency_mean else '#bdc3c7' for x in sorted_workers['효율성지수']]
                                 
                                 # 효율성 지수 막대 그래프
                                 bars = ax.bar(sorted_workers['정비자정보'], sorted_workers['효율성지수'], color=colors)
                                 
                                 # 기준선 (1.0) 추가
-                                ax.axhline(y=1.0, color='black', linestyle='--', alpha=0.7)
+                                ax.axhline(y=efficiency_mean, color='red', linestyle='--', alpha=0.7)
+                                ax.text(len(sorted_workers)-1, efficiency_mean + 0.1, f"평균효율성지수: {efficiency_mean:.2f}", color='red', ha='right')
                                 
                                 # 축 설정
                                 plt.xticks(rotation=45, ha='right')
@@ -485,7 +487,8 @@ def display_integrated_dashboard(df, category_name, key_prefix):
                                 st.markdown(get_image_download_link(fig, f'{category_name}_정비자별_수리비효율성.png', '정비자별 수리비 효율성 다운로드'), unsafe_allow_html=True)
                                 
                                 # 효율성 지수에 대한 설명 추가
-                                st.info("1 초과: 건수 대비 수리비가 많이 소요됨 / 1 미만: 효율적인 비용으로 수리함")
+                                st.info("평균 효율성 지수 초과: 평균보다 높은 수리비를 사용한 정비자 (비효율)\n"
+                                        "평균 효율성 지수 이하: 평균보다 적은 수리비로 처리한 정비자 (고효율)")
                                 
                             else:
                                 st.warning("30건 이상 처리한 정비자 데이터가 없습니다.")

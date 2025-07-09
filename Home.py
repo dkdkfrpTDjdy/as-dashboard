@@ -61,12 +61,10 @@ df2, df4 = load_static_data()
 if df2 is not None:
     st.session_state.df2 = df2
     st.sidebar.success("자산조회 데이터 로드 완료")
-    st.sidebar.info(f"자산조회 데이터 크기: {df2.shape}")
 
 if df4 is not None:
     st.session_state.df4 = df4
     st.sidebar.success("조직도 데이터 로드 완료")
-    st.sidebar.info(f"조직도 데이터 크기: {df4.shape}")
 
 # 메인 제목
 st.title("산업장비 AS 분석 대시보드")
